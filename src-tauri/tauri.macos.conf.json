@@ -1,0 +1,17 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "RML Launcher",
+        "width": 880,
+        "height": 540,
+        "resizable": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "shadow": true,
+        "center": true
+      }
+    ]
+  }
+}

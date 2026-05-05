@@ -1,14 +1,34 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod logging;
+mod studio;
+
+pub mod i18n;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            logging::init(app.handle()).map_err(Into::into)
+        })
+        .manage(studio::StudioState::default())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            studio::engine::apply_engine_state_patch,
+            studio::engine::clear_engine_flag_overrides,
+            studio::engine::get_engine_state,
+            studio::engine::set_engine_target_version,
+            studio::install_latest_studio,
+            studio::install_studio_version,
+            studio::launch_studio,
+            studio::list_studio_versions,
+            studio::open_studio_install_dir,
+            studio::engine::remove_engine_flag_override,
+            studio::revalidate_studio_version,
+            studio::engine::rescan_engine_flags,
+            studio::engine::set_engine_general_settings,
+            studio::set_default_studio_version,
+            studio::uninstall_studio,
+            studio::engine::upsert_engine_flag_override,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

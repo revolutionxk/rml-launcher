@@ -12,9 +12,16 @@
   "app": {
     "windows": [
       {
-        "title": "rml-launcher",
-        "width": 800,
-        "height": 600
+        "title": "RML Launcher",
+        "width": 880,
+        "height": 540,
+        "minWidth": 880,
+        "minHeight": 540,
+        "resizable": true,
+        "maximizable": true,
+        "decorations": false,
+        "shadow": true,
+        "center": true
       }
     ],
     "security": {
