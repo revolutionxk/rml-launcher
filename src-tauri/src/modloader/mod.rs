@@ -57,9 +57,13 @@ pub async fn install_modloader(
     let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
     let release = api::fetch_release(&tag).await.map_err(|error| error.to_string())?;
 
-    install_release(&app, &release, &version_guid, &install_dir)
+    let manifest = install_release(&app, &release, &version_guid, &install_dir)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    set_vinegar_dwmapi_override(&version_guid, true);
+
+    Ok(manifest)
 }
 
 #[tauri::command]
@@ -86,6 +90,8 @@ pub async fn uninstall_modloader(
         .await
         .map_err(|error| error.to_string())?;
 
+    set_vinegar_dwmapi_override(&version_guid, false);
+
     info!(version_guid, tag = %manifest.tag, "mod loader uninstalled from Studio version");
 
     Ok(())
@@ -93,4 +99,15 @@ pub async fn uninstall_modloader(
 
 pub(crate) fn installed_manifest(install_dir: &Path) -> Option<ModLoaderInstalled> {
     load_manifest(install_dir).ok().flatten()
+}
+
+fn set_vinegar_dwmapi_override(version_guid: &str, enabled: bool) {
+    #[cfg(target_os = "linux")]
+    if version_guid == crate::vinegar::INSTANCE_ID {
+        if let Err(error) = crate::vinegar::set_dwmapi_override(enabled) {
+            tracing::warn!(error = %error, "failed to update the Vinegar dwmapi override");
+        }
+    }
+
+    let _ = (version_guid, enabled);
 }

@@ -57,6 +57,10 @@ pub(crate) fn installed_instances(app: &AppHandle) -> Result<Vec<StudioVersionEn
 }
 
 pub(crate) fn installed_studio_target(app: &AppHandle, version_guid: &str) -> Result<PathBuf> {
+    if version_guid == crate::vinegar::INSTANCE_ID {
+        return crate::vinegar::studio_dir();
+    }
+
     let install_dir = version_install_dir(app, version_guid)?;
     let manifest_path = version_manifest_path(&install_dir);
 

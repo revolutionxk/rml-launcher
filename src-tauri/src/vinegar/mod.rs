@@ -9,7 +9,10 @@ use serde_json::{Map, Value};
 use toml_edit::{value as toml_value, DocumentMut, Item, Table, Value as TomlValue};
 use tracing::info;
 
+
+pub const INSTANCE_ID: &str = "vinegar";
 const FLATPAK_APP_ID: &str = "org.vinegarhq.Vinegar";
+const STUDIO_EXECUTABLE: &str = "RobloxStudioBeta.exe";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,21 +28,27 @@ pub struct VinegarStatus {
     pub installed: bool,
     pub kind: VinegarKind,
     pub flatpak_available: bool,
+    pub studio_found: bool,
 }
 
 pub fn detect() -> VinegarStatus {
-    let kind = if binary_on_path("vinegar") {
-        VinegarKind::Binary
-    } else if flatpak_app_installed(FLATPAK_APP_ID) {
-        VinegarKind::Flatpak
-    } else {
-        VinegarKind::None
-    };
+    let kind = detect_kind();
 
     VinegarStatus {
         installed: kind != VinegarKind::None,
         kind,
         flatpak_available: binary_on_path("flatpak"),
+        studio_found: studio_dir_for(kind).is_ok(),
+    }
+}
+
+fn detect_kind() -> VinegarKind {
+    if binary_on_path("vinegar") {
+        VinegarKind::Binary
+    } else if flatpak_app_installed(FLATPAK_APP_ID) {
+        VinegarKind::Flatpak
+    } else {
+        VinegarKind::None
     }
 }
 
@@ -114,22 +123,141 @@ fn launch_blocking(kind: VinegarKind) -> Result<()> {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn config_path() -> Option<PathBuf> {
-    let home = home_dir()?;
+    Some(vinegar_config_dir(detect_kind())?.join("config.toml"))
+}
 
-    let flatpak = home
-        .join(".var/app")
-        .join(FLATPAK_APP_ID)
-        .join("config/vinegar/config.toml");
-    if flatpak.exists() {
-        return Some(flatpak);
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn studio_dir() -> Result<PathBuf> {
+    studio_dir_for(detect_kind())
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn studio_dir_for(kind: VinegarKind) -> Result<PathBuf> {
+    if !cfg!(target_os = "linux") {
+        bail!("Vinegar is only available on Linux.");
     }
 
-    let xdg = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config"))
-        .join("vinegar/config.toml");
+    let versions = vinegar_data_dir(kind)
+        .map(|data| data.join("versions"))
+        .context("could not resolve the Vinegar data directory")?;
 
-    Some(xdg)
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+
+    if let Ok(entries) = std::fs::read_dir(&versions) {
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.join(STUDIO_EXECUTABLE).is_file() {
+                continue;
+            }
+
+            let modified = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(std::time::UNIX_EPOCH);
+
+            if newest.as_ref().map(|(time, _)| modified > *time).unwrap_or(true) {
+                newest = Some((modified, dir));
+            }
+        }
+    }
+
+    newest.map(|(_, dir)| dir).context(
+        "no Roblox Studio install was found in Vinegar — launch Studio through Vinegar once first",
+    )
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn set_dwmapi_override(enabled: bool) -> Result<()> {
+    let path = config_path().context("could not resolve the Vinegar config directory")?;
+
+    let mut document = if path.exists() {
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?
+            .parse::<DocumentMut>()
+            .with_context(|| format!("failed to parse {}", path.display()))?
+    } else {
+        DocumentMut::new()
+    };
+
+    set_dwmapi_override_in_doc(&mut document, enabled);
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    std::fs::write(&path, document.to_string())
+        .with_context(|| format!("failed to write {}", path.display()))?;
+
+    Ok(())
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn set_dwmapi_override_in_doc(document: &mut DocumentMut, enabled: bool) {
+    let studio = document
+        .entry("studio")
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .expect("studio entry is a table");
+    studio.set_implicit(false);
+
+    let env = studio
+        .entry("env")
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .expect("env entry is a table");
+    env.set_implicit(false);
+
+    let current = env.get("WINEDLLOVERRIDES").and_then(|item| item.as_str()).unwrap_or("");
+    let mut entries: Vec<String> = current
+        .split(';')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty() && !entry.starts_with("dwmapi"))
+        .map(|entry| entry.to_string())
+        .collect();
+
+    if enabled {
+        entries.push("dwmapi=n,b".to_string());
+    }
+
+    if entries.is_empty() {
+        env.remove("WINEDLLOVERRIDES");
+    } else {
+        env.insert("WINEDLLOVERRIDES", toml_value(entries.join(";")));
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn vinegar_config_dir(kind: VinegarKind) -> Option<PathBuf> {
+    let base = if kind == VinegarKind::Flatpak {
+        flatpak_home()?.join("config")
+    } else {
+        xdg_dir("XDG_CONFIG_HOME", ".config")?
+    };
+
+    Some(base.join("vinegar"))
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn vinegar_data_dir(kind: VinegarKind) -> Option<PathBuf> {
+    let base = if kind == VinegarKind::Flatpak {
+        flatpak_home()?.join("data")
+    } else {
+        xdg_dir("XDG_DATA_HOME", ".local/share")?
+    };
+
+    Some(base.join("vinegar"))
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn flatpak_home() -> Option<PathBuf> {
+    Some(home_dir()?.join(".var/app").join(FLATPAK_APP_ID))
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn xdg_dir(env_var: &str, fallback: &str) -> Option<PathBuf> {
+    std::env::var_os(env_var)
+        .map(PathBuf::from)
+        .or_else(|| home_dir().map(|home| home.join(fallback)))
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -218,8 +346,38 @@ fn home_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::apply_fflags_to_path;
+    use super::{apply_fflags_to_path, set_dwmapi_override_in_doc};
     use serde_json::json;
+    use toml_edit::DocumentMut;
+
+    #[test]
+    fn toggles_dwmapi_override_preserving_other_overrides() {
+        let mut document = "[studio.env]\nWINEDLLOVERRIDES = \"winhttp=n;d3d11=b\"\n"
+            .parse::<DocumentMut>()
+            .unwrap();
+
+        set_dwmapi_override_in_doc(&mut document, true);
+        let value = document["studio"]["env"]["WINEDLLOVERRIDES"].as_str().unwrap();
+        assert!(value.contains("winhttp=n"));
+        assert!(value.contains("d3d11=b"));
+        assert!(value.contains("dwmapi=n,b"));
+
+        // Disabling removes only the dwmapi entry, keeping the rest, and is idempotent.
+        set_dwmapi_override_in_doc(&mut document, false);
+        let value = document["studio"]["env"]["WINEDLLOVERRIDES"].as_str().unwrap();
+        assert!(!value.contains("dwmapi"));
+        assert!(value.contains("winhttp=n"));
+    }
+
+    #[test]
+    fn removes_override_key_when_empty() {
+        let mut document = DocumentMut::new();
+        set_dwmapi_override_in_doc(&mut document, true);
+        assert_eq!(document["studio"]["env"]["WINEDLLOVERRIDES"].as_str(), Some("dwmapi=n,b"));
+
+        set_dwmapi_override_in_doc(&mut document, false);
+        assert!(document["studio"]["env"].get("WINEDLLOVERRIDES").is_none());
+    }
 
     #[test]
     fn writes_and_replaces_fflags_preserving_other_config() {

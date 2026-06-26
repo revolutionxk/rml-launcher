@@ -18,7 +18,10 @@ export interface VinegarStatus {
   installed: boolean;
   kind: VinegarKind;
   flatpakAvailable: boolean;
+  studioFound: boolean;
 }
+
+export const VINEGAR_INSTANCE_ID = "vinegar";
 
 export async function getVinegarStatus() {
   return invoke<VinegarStatus>("vinegar_status");

@@ -15,6 +15,7 @@ import { motion } from "motion/react";
 import { useDeferredValue, useState } from "react";
 
 import { PlatformNotice } from "@/components/platform-notice";
+import { VinegarStudio } from "@/components/instance/vinegar-studio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ import { useI18n } from "@/i18n";
 import { getErrorMessage } from "@/lib/format";
 import type { InstanceSummary } from "@/lib/instances";
 import { type ModLoaderChannel } from "@/lib/modloader";
-import { useInstances, useModLoaderReleases } from "@/lib/queries";
+import { useHostInfo, useInstances, useModLoaderReleases } from "@/lib/queries";
 import { launchStudio } from "@/lib/studio";
 
 export const Route = createFileRoute("/settings/instances/")({
@@ -56,6 +57,7 @@ function matchesQuery(instance: InstanceSummary, query: string) {
 function InstancesPage() {
   const { formatDate, t } = useI18n();
   const navigate = useNavigate();
+  const { data: host } = useHostInfo();
   const { data: instances = [], isLoading, isFetching, refetch } = useInstances();
   const { data: releases = [] } = useModLoaderReleases();
 
@@ -100,6 +102,10 @@ function InstancesPage() {
   const openInstance = (versionGuid: string) => {
     void navigate({ to: "/settings/instances/$versionGuid", params: { versionGuid } });
   };
+  
+  if (host?.os === "linux") {
+    return <VinegarStudio />;
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">

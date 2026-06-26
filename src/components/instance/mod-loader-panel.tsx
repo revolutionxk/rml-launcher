@@ -103,6 +103,8 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.instances }),
       queryClient.invalidateQueries({ queryKey: queryKeys.mods(versionGuid) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.modloaderStatus(versionGuid) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.vinegarStatus }),
     ]);
   };
 
