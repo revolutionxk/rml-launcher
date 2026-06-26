@@ -14,6 +14,7 @@ import {
 import { motion } from "motion/react";
 import { useDeferredValue, useState } from "react";
 
+import { PlatformNotice } from "@/components/platform-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +157,8 @@ function InstancesPage() {
           </Input.Root>
         )}
       </div>
+
+      <PlatformNotice />
 
       {errorMessage && (
         <div className="mb-4 shrink-0 rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">

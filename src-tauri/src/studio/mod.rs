@@ -180,6 +180,13 @@ pub async fn launch_studio(app: AppHandle, version_guid: String) -> Result<(), S
         return Err("RobloxStudioBeta.exe was not found for the selected version.".to_string());
     }
 
+    if !cfg!(target_os = "windows") {
+        return Err(
+            "Launching Studio directly is only available on Windows. On Linux, run Studio through Vinegar."
+                .to_string(),
+        );
+    }
+
     apply_saved_preferences_to_install_dir(&app, &install_dir)
         .await
         .map_err(|error| error.to_string())?;
@@ -237,17 +244,7 @@ pub async fn open_studio_install_dir(app: AppHandle, version_guid: String) -> Re
         return Err("The selected Studio version is not installed.".to_string());
     }
 
-    tokio::task::spawn_blocking(move || -> Result<()> {
-        Command::new("explorer")
-            .arg(&install_dir)
-            .spawn()
-            .with_context(|| format!("failed to open {}", install_dir.display()))?;
-
-        Ok(())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())
+    crate::platform::reveal_path(&install_dir).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

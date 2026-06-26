@@ -6,7 +6,9 @@ pub const APP_SETTINGS_XML: &str = include_str!("../../resources/app_settings.xm
 pub const OAUTH2_CONFIG_JSON: &str = include_str!("../../resources/OAuth2Config.json");
 
 pub fn binary_target() -> &'static str {
-    if cfg!(target_pointer_width = "64") {
+    if cfg!(target_os = "macos") {
+        "MacStudio"
+    } else if cfg!(target_pointer_width = "64") {
         "WindowsStudio64"
     } else {
         "WindowsStudio"
@@ -14,11 +16,13 @@ pub fn binary_target() -> &'static str {
 }
 
 pub fn deploy_history_product() -> &'static str {
-  if cfg!(target_pointer_width = "64") {
-    "Studio64"
-  } else {
-    "Studio"
-  }
+    if cfg!(target_os = "macos") {
+        "MacStudio"
+    } else if cfg!(target_pointer_width = "64") {
+        "Studio64"
+    } else {
+        "Studio"
+    }
 }
 
 pub fn package_extract_root(package_stem: &str, version_major: u32) -> &'static str {

@@ -553,8 +553,30 @@ async fn sync_preferences_to_installed_versions(
         apply_preferences_to_install_dir(&target.install_dir, profile).await?;
     }
 
+    sync_preferences_to_vinegar(preferences);
+
     Ok(())
 }
+
+#[cfg(target_os = "linux")]
+fn sync_preferences_to_vinegar(preferences: &EnginePreferences) {
+    if !crate::vinegar::detect().installed {
+        return;
+    }
+
+    let profile = active_profile(preferences, None);
+    match build_flag_value_map(profile) {
+        Ok(fflags) => {
+            if let Err(error) = crate::vinegar::apply_fflags(&fflags) {
+                tracing::warn!(error = %error, "failed to sync Fast Flags to Vinegar");
+            }
+        }
+        Err(error) => tracing::warn!(error = %error, "failed to build Fast Flags for Vinegar"),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn sync_preferences_to_vinegar(_preferences: &EnginePreferences) {}
 
 async fn apply_preferences_to_install_dir(
     install_dir: &Path,
@@ -585,7 +607,7 @@ async fn apply_preferences_to_install_dir(
     Ok(())
 }
 
-fn build_client_app_settings(profile: &EngineVersionPreferences) -> Result<Vec<u8>> {
+fn build_flag_value_map(profile: &EngineVersionPreferences) -> Result<Map<String, Value>> {
     let mut json = Map::new();
 
     for (name, override_entry) in &profile.overrides {
@@ -594,6 +616,12 @@ fn build_client_app_settings(profile: &EngineVersionPreferences) -> Result<Vec<u
             serialize_override_value(name, &override_entry.value)?,
         );
     }
+
+    Ok(json)
+}
+
+fn build_client_app_settings(profile: &EngineVersionPreferences) -> Result<Vec<u8>> {
+    let json = build_flag_value_map(profile)?;
 
     serde_json::to_vec_pretty(&Value::Object(json)).context("failed to serialize ClientAppSettings.json")
 }

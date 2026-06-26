@@ -2,7 +2,9 @@ mod instances;
 mod logging;
 mod modloader;
 mod mods;
+mod platform;
 mod studio;
+mod vinegar;
 
 pub mod i18n;
 
@@ -43,6 +45,10 @@ pub fn run() {
             mods::import_mod,
             mods::open_mods_dir,
             instances::list_instances,
+            platform::get_host_info,
+            vinegar::vinegar_status,
+            vinegar::install_vinegar,
+            vinegar::launch_vinegar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
