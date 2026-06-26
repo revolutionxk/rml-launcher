@@ -1,0 +1,112 @@
+name: Nightly
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  reset-release:
+    name: Reset nightly release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = "nightly";
+
+            const releases = await github.rest.repos.listReleases({ owner, repo });
+            const release = releases.data.find((r) => r.tag_name === tag);
+            if (release) {
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+              core.info(`Deleted release ${release.id}`);
+            }
+
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
+              core.info(`Deleted tag ${tag}`);
+            } catch (error) {
+              core.info(`No tag to delete: ${error.message}`);
+            }
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: reset-release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: ${{ matrix.platform }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libayatana-appindicator3-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Short SHA
+        id: sha
+        shell: bash
+        run: echo "value=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: nightly
+          releaseName: Nightly [${{ steps.sha.outputs.value }}]
+          releaseBody: |
+            Automated nightly build of RML Launcher from `develop` (${{ steps.sha.outputs.value }}).
+
+            Built by GitHub Actions — [build log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            These builds are for testing and may be unstable. Installers are attached for Windows, macOS (universal) and Linux.
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.args }}

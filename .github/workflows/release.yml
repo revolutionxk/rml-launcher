@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g. v1.2.3). Leave blank to use the version in tauri.conf.json."
+        required: false
+        default: ""
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.meta.outputs.should_release }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          conf_version="$(jq -r .version src-tauri/tauri.conf.json)"
+
+          if [ "$REF_TYPE" = "tag" ]; then
+            tag="$REF_NAME"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_VERSION" ]; then
+            tag="$INPUT_VERSION"
+          else
+            tag="v${conf_version}"
+          fi
+
+          case "$tag" in v*) ;; *) tag="v${tag}" ;; esac
+          version="${tag#v}"
+          
+          if [ "$REF_TYPE" = "tag" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            should_release=true
+          elif gh release view "$tag" >/dev/null 2>&1; then
+            should_release=false
+          else
+            should_release=true
+          fi
+
+          case "$version" in
+            *alpha*|*beta*|*rc*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "should_release=$should_release"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=$tag version=$version should_release=$should_release prerelease=$prerelease"
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: ${{ matrix.platform }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libayatana-appindicator3-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.prepare.outputs.tag }}
+          releaseName: RML Launcher ${{ needs.prepare.outputs.tag }}
+          releaseBody: |
+            RML Launcher ${{ needs.prepare.outputs.tag }}.
+
+            Download the installer for your platform below — Windows (`.exe`/`.msi`), macOS (`.dmg`, universal) and Linux (`.AppImage`/`.deb`).
+          releaseDraft: false
+          prerelease: ${{ needs.prepare.outputs.prerelease }}
+          args: ${{ matrix.args }}
