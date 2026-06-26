@@ -14,10 +14,12 @@ import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsVersionsRouteImport } from './routes/settings/versions'
-import { Route as SettingsModsRouteImport } from './routes/settings/mods'
+import { Route as SettingsInstancesRouteImport } from './routes/settings/instances'
 import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsAboutRouteImport } from './routes/settings/about'
+import { Route as SettingsInstancesIndexRouteImport } from './routes/settings/instances.index'
+import { Route as SettingsInstancesVersionGuidRouteImport } from './routes/settings/instances.$versionGuid'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -44,9 +46,9 @@ const SettingsVersionsRoute = SettingsVersionsRouteImport.update({
   path: '/versions',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsModsRoute = SettingsModsRouteImport.update({
-  id: '/mods',
-  path: '/mods',
+const SettingsInstancesRoute = SettingsInstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsEngineRoute = SettingsEngineRouteImport.update({
@@ -64,6 +66,17 @@ const SettingsAboutRoute = SettingsAboutRouteImport.update({
   path: '/about',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsInstancesIndexRoute = SettingsInstancesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsInstancesRoute,
+} as any)
+const SettingsInstancesVersionGuidRoute =
+  SettingsInstancesVersionGuidRouteImport.update({
+    id: '/$versionGuid',
+    path: '/$versionGuid',
+    getParentRoute: () => SettingsInstancesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,9 +85,11 @@ export interface FileRoutesByFullPath {
   '/settings/about': typeof SettingsAboutRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/engine': typeof SettingsEngineRoute
-  '/settings/mods': typeof SettingsModsRoute
+  '/settings/instances': typeof SettingsInstancesRouteWithChildren
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings/': typeof SettingsIndexRoute
+  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances/': typeof SettingsInstancesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,9 +97,10 @@ export interface FileRoutesByTo {
   '/settings/about': typeof SettingsAboutRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/engine': typeof SettingsEngineRoute
-  '/settings/mods': typeof SettingsModsRoute
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings': typeof SettingsIndexRoute
+  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances': typeof SettingsInstancesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,9 +110,11 @@ export interface FileRoutesById {
   '/settings/about': typeof SettingsAboutRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/engine': typeof SettingsEngineRoute
-  '/settings/mods': typeof SettingsModsRoute
+  '/settings/instances': typeof SettingsInstancesRouteWithChildren
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings/': typeof SettingsIndexRoute
+  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances/': typeof SettingsInstancesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,9 +125,11 @@ export interface FileRouteTypes {
     | '/settings/about'
     | '/settings/appearance'
     | '/settings/engine'
-    | '/settings/mods'
+    | '/settings/instances'
     | '/settings/versions'
     | '/settings/'
+    | '/settings/instances/$versionGuid'
+    | '/settings/instances/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,9 +137,10 @@ export interface FileRouteTypes {
     | '/settings/about'
     | '/settings/appearance'
     | '/settings/engine'
-    | '/settings/mods'
     | '/settings/versions'
     | '/settings'
+    | '/settings/instances/$versionGuid'
+    | '/settings/instances'
   id:
     | '__root__'
     | '/'
@@ -128,9 +149,11 @@ export interface FileRouteTypes {
     | '/settings/about'
     | '/settings/appearance'
     | '/settings/engine'
-    | '/settings/mods'
+    | '/settings/instances'
     | '/settings/versions'
     | '/settings/'
+    | '/settings/instances/$versionGuid'
+    | '/settings/instances/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -176,11 +199,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsVersionsRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/mods': {
-      id: '/settings/mods'
-      path: '/mods'
-      fullPath: '/settings/mods'
-      preLoaderRoute: typeof SettingsModsRouteImport
+    '/settings/instances': {
+      id: '/settings/instances'
+      path: '/instances'
+      fullPath: '/settings/instances'
+      preLoaderRoute: typeof SettingsInstancesRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/engine': {
@@ -204,14 +227,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAboutRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/instances/': {
+      id: '/settings/instances/'
+      path: '/'
+      fullPath: '/settings/instances/'
+      preLoaderRoute: typeof SettingsInstancesIndexRouteImport
+      parentRoute: typeof SettingsInstancesRoute
+    }
+    '/settings/instances/$versionGuid': {
+      id: '/settings/instances/$versionGuid'
+      path: '/$versionGuid'
+      fullPath: '/settings/instances/$versionGuid'
+      preLoaderRoute: typeof SettingsInstancesVersionGuidRouteImport
+      parentRoute: typeof SettingsInstancesRoute
+    }
   }
 }
+
+interface SettingsInstancesRouteChildren {
+  SettingsInstancesVersionGuidRoute: typeof SettingsInstancesVersionGuidRoute
+  SettingsInstancesIndexRoute: typeof SettingsInstancesIndexRoute
+}
+
+const SettingsInstancesRouteChildren: SettingsInstancesRouteChildren = {
+  SettingsInstancesVersionGuidRoute: SettingsInstancesVersionGuidRoute,
+  SettingsInstancesIndexRoute: SettingsInstancesIndexRoute,
+}
+
+const SettingsInstancesRouteWithChildren =
+  SettingsInstancesRoute._addFileChildren(SettingsInstancesRouteChildren)
 
 interface SettingsRouteChildren {
   SettingsAboutRoute: typeof SettingsAboutRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsEngineRoute: typeof SettingsEngineRoute
-  SettingsModsRoute: typeof SettingsModsRoute
+  SettingsInstancesRoute: typeof SettingsInstancesRouteWithChildren
   SettingsVersionsRoute: typeof SettingsVersionsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
@@ -220,7 +270,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAboutRoute: SettingsAboutRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsEngineRoute: SettingsEngineRoute,
-  SettingsModsRoute: SettingsModsRoute,
+  SettingsInstancesRoute: SettingsInstancesRouteWithChildren,
   SettingsVersionsRoute: SettingsVersionsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }

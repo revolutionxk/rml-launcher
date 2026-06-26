@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Package, Puzzle, Cpu, Palette, Info } from "lucide-react";
+import { ArrowLeft, Package, Boxes, Cpu, Palette, Info } from "lucide-react";
 import { motion } from "motion/react";
 
 import { useI18n } from "@/i18n";
@@ -14,7 +14,11 @@ const NAV_ITEMS = [
     icon: <Package size={14} />,
     labelId: "settings-nav-versions",
   },
-  { to: "/settings/mods" as const, icon: <Puzzle size={14} />, labelId: "settings-nav-mods" },
+  {
+    to: "/settings/instances" as const,
+    icon: <Boxes size={14} />,
+    labelId: "settings-nav-instances",
+  },
   {
     to: "/settings/engine" as const,
     icon: <Cpu size={14} />,

@@ -136,7 +136,7 @@ function HomePage() {
             iconClass="icon-box--gray"
             label={t("home-action-settings-label")}
             description={t("home-action-settings-description")}
-            onClick={() => navigate({ to: "/settings/mods" })}
+            onClick={() => navigate({ to: "/settings/instances" })}
           />
         </motion.div>
 

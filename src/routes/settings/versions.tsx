@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -20,10 +21,10 @@ import { Input } from "@/components/ui/input";
 import { Menu } from "@/components/ui/menu";
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/i18n";
+import { queryKeys, useStudioVersions } from "@/lib/queries";
 import {
   installStudioVersion,
   launchStudio,
-  listStudioVersions,
   openStudioInstallDir,
   revalidateStudioVersion,
   setDefaultStudioVersion,
@@ -155,10 +156,9 @@ function VersionActionsMenu({
 
 function VersionsPage() {
   const { formatDate, t } = useI18n();
-  const [versions, setVersions] = useState<StudioVersionRecord[]>([]);
+  const queryClient = useQueryClient();
+  const { data: versions = [], isLoading, isFetching, error } = useStudioVersions();
   const [activeInstall, setActiveInstall] = useState<StudioInstallProgress | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [launchingVersionId, setLaunchingVersionId] = useState<string | null>(null);
   const [openingVersionId, setOpeningVersionId] = useState<string | null>(null);
@@ -167,6 +167,8 @@ function VersionsPage() {
   const [defaultingVersionId, setDefaultingVersionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const isRefreshing = isFetching && !isLoading;
+  const loadErrorMessage = error ? getErrorMessage(error, t("versions-error-generic")) : null;
   const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
   const isInstalling =
     activeInstall !== null &&
@@ -181,23 +183,13 @@ function VersionsPage() {
   const hasSearchQuery = deferredSearchQuery.length > 0;
   const listKey = hasSearchQuery ? `search:${deferredSearchQuery}` : "all";
 
-  const refreshVersions = async (showLoading = false) => {
-    if (showLoading) {
-      setIsLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
-
-    try {
-      const nextVersions = await listStudioVersions();
-      setVersions(nextVersions);
-      setErrorMessage(null);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, t("versions-error-generic")));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
+  // Invalidate the cached version catalog and the instances list (which derives
+  // from it) so both refresh together after an install/uninstall/revalidate.
+  const refreshVersions = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.studioVersions }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.instances }),
+    ]);
   };
 
   useEffect(() => {
@@ -227,8 +219,6 @@ function VersionsPage() {
         setActiveInstall(payload);
       },
     );
-
-    void refreshVersions(true);
 
     return () => {
       disposed = true;
@@ -296,9 +286,7 @@ function VersionsPage() {
       await setDefaultStudioVersion(version.isDefault ? null : version.versionGuid);
       await refreshVersions();
     } catch (error) {
-      setErrorMessage(
-        getErrorMessage(error, t("versions-error-generic")),
-      );
+      setErrorMessage(getErrorMessage(error, t("versions-error-generic")));
     } finally {
       setDefaultingVersionId(null);
     }
@@ -457,11 +445,6 @@ function VersionsPage() {
                   <Badge.Label>{t("versions-badge-revalidating")}</Badge.Label>
                 </Badge.Root>
               )}
-              {!version.isLatest && !version.isInstalled && !isDownloading && publishedDate && (
-                <Badge.Root variant="blue">
-                  <Badge.Label>{t("versions-badge-history")}</Badge.Label>
-                </Badge.Root>
-              )}
               {version.isInstalled && !version.isLatest && !isDownloading && (
                 <Badge.Root variant="green">
                   <Badge.Label>{t("versions-badge-installed")}</Badge.Label>
@@ -613,9 +596,9 @@ function VersionsPage() {
         </Input.Root>
       </div>
 
-      {errorMessage && (
+      {(errorMessage ?? loadErrorMessage) && (
         <div className="mb-4 rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
-          {errorMessage}
+          {errorMessage ?? loadErrorMessage}
         </div>
       )}
 

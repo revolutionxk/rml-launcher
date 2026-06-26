@@ -6,6 +6,7 @@ mod model;
 mod paths;
 mod storage;
 
+use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -17,7 +18,7 @@ use self::{
     config::CURRENT_CHANNEL,
     engine::apply_saved_preferences_to_install_dir,
     installer::{install_version, revalidate_version},
-    model::{StudioBuild, StudioVersionEntry, StudioVersionsResponse},
+    model::{StudioBuild, StudioVersionsResponse},
     paths::{version_download_dir, version_executable_path, version_install_dir, version_manifest_path},
     storage::{
         discover_installed_versions, load_studio_preferences, read_installed_manifest,
@@ -25,9 +26,45 @@ use self::{
     },
 };
 
+pub(crate) use self::model::StudioVersionEntry;
+
 #[derive(Default)]
 pub struct StudioState {
     install_lock: Mutex<()>,
+}
+
+pub(crate) fn installed_instances(app: &AppHandle) -> Result<Vec<StudioVersionEntry>> {
+    let mut versions = discover_installed_versions(app)?;
+    let preferences = load_studio_preferences(app).unwrap_or_default();
+
+    if let Some(default_version_guid) = preferences.default_version_guid.as_deref() {
+        for version in versions.iter_mut() {
+            if api::same_version_guid(&version.version_guid, default_version_guid) {
+                version.is_default = true;
+            }
+        }
+    }
+
+    versions.sort_by(|left, right| {
+        right
+            .is_default
+            .cmp(&left.is_default)
+            .then_with(|| right.installed_at.cmp(&left.installed_at))
+            .then_with(|| right.version.cmp(&left.version))
+    });
+
+    Ok(versions)
+}
+
+pub(crate) fn installed_studio_target(app: &AppHandle, version_guid: &str) -> Result<PathBuf> {
+    let install_dir = version_install_dir(app, version_guid)?;
+    let manifest_path = version_manifest_path(&install_dir);
+
+    if !manifest_path.exists() {
+        anyhow::bail!("The selected Studio version is not installed.");
+    }
+
+    Ok(install_dir)
 }
 
 #[tauri::command]

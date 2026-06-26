@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -13,6 +14,17 @@ const memoryHistory = createMemoryHistory({ initialEntries: ["/"] });
 
 const router = createRouter({ routeTree, history: memoryHistory });
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
+
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
@@ -26,8 +38,10 @@ document.addEventListener("dragover", (e) => e.preventDefault());
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <I18nProvider>
-      <RouterProvider router={router} />
-    </I18nProvider>
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider>
+        <RouterProvider router={router} />
+      </I18nProvider>
+    </QueryClientProvider>
   </React.StrictMode>,
 );
