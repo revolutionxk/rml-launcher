@@ -27,6 +27,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+      release_id: ${{ steps.create.outputs.result }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +53,7 @@ jobs:
 
           case "$tag" in v*) ;; *) tag="v${tag}" ;; esac
           version="${tag#v}"
-          
+
           if [ "$REF_TYPE" = "tag" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             should_release=true
           elif gh release view "$tag" >/dev/null 2>&1; then
@@ -73,6 +74,42 @@ jobs:
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
           echo "Resolved tag=$tag version=$version should_release=$should_release prerelease=$prerelease"
+
+      - name: Create draft release
+        id: create
+        if: steps.meta.outputs.should_release == 'true'
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        with:
+          result-encoding: string
+          script: |
+            const tag = process.env.TAG;
+            const { owner, repo } = context.repo;
+
+            const releases = await github.rest.repos.listReleases({ owner, repo });
+            const existing = releases.data.find((r) => r.tag_name === tag);
+            if (existing) {
+              await github.rest.repos.updateRelease({ owner, repo, release_id: existing.id, draft: true });
+              return existing.id;
+            }
+
+            const { data } = await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: `RML Launcher ${tag}`,
+              body: [
+                `RML Launcher ${tag}.`,
+                "",
+                "Download the installer for your platform below — Windows (`.exe`/`.msi`), macOS (`.dmg`, universal) and Linux (`.AppImage`/`.deb`).",
+              ].join("\n"),
+              draft: true,
+              prerelease: process.env.PRERELEASE === "true",
+            });
+            return data.id;
 
   build:
     name: Build (${{ matrix.platform }})
@@ -129,17 +166,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build and publish
+      - name: Build and upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ needs.prepare.outputs.tag }}
-          releaseName: RML Launcher ${{ needs.prepare.outputs.tag }}
-          releaseBody: |
-            RML Launcher ${{ needs.prepare.outputs.tag }}.
-
-            Download the installer for your platform below — Windows (`.exe`/`.msi`), macOS (`.dmg`, universal) and Linux (`.AppImage`/`.deb`).
-          releaseDraft: false
-          prerelease: ${{ needs.prepare.outputs.prerelease }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  publish:
+    name: Publish release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false,
+              make_latest: process.env.PRERELEASE === "true" ? "false" : "true",
+            });

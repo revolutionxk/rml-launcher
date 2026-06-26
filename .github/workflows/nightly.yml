@@ -13,33 +13,64 @@ permissions:
   contents: write
 
 jobs:
-  reset-release:
-    name: Reset nightly release
+  create-release:
+    name: Create nightly release
     runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+      short_sha: ${{ steps.sha.outputs.value }}
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/checkout@v4
+
+      - name: Short SHA
+        id: sha
+        run: echo "value=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Delete previous nightly release and tag
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const tag = "nightly";
-
             const releases = await github.rest.repos.listReleases({ owner, repo });
-            const release = releases.data.find((r) => r.tag_name === tag);
+            const release = releases.data.find((r) => r.tag_name === "nightly");
             if (release) {
               await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
               core.info(`Deleted release ${release.id}`);
             }
-
             try {
-              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
-              core.info(`Deleted tag ${tag}`);
+              await github.rest.git.deleteRef({ owner, repo, ref: "tags/nightly" });
+              core.info("Deleted tag nightly");
             } catch (error) {
               core.info(`No tag to delete: ${error.message}`);
             }
 
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: "nightly",
+              target_commitish: context.sha,
+              name: `Nightly [${{ steps.sha.outputs.value }}]`,
+              body: [
+                `Automated nightly build of RML Launcher from \`develop\` (${{ steps.sha.outputs.value }}).`,
+                "",
+                `Built by GitHub Actions — [build log](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
+                "",
+                "These builds are for testing and may be unstable. Installers are attached for Windows, macOS (universal) and Linux.",
+              ].join("\n"),
+              draft: true,
+              prerelease: true,
+            });
+            return data.id;
+
   build:
     name: Build (${{ matrix.platform }})
-    needs: reset-release
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -91,24 +122,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Short SHA
-        id: sha
-        shell: bash
-        run: echo "value=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Build and publish
+      - name: Build and upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: nightly
-          releaseName: Nightly [${{ steps.sha.outputs.value }}]
-          releaseBody: |
-            Automated nightly build of RML Launcher from `develop` (${{ steps.sha.outputs.value }}).
-
-            Built by GitHub Actions — [build log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
-
-            These builds are for testing and may be unstable. Installers are attached for Windows, macOS (universal) and Linux.
-          releaseDraft: false
-          prerelease: true
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  publish:
+    name: Publish nightly release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false,
+            });
