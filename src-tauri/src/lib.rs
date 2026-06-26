@@ -10,6 +10,9 @@ pub mod i18n;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+
     tauri::Builder::default()
         .setup(|app| {
             logging::init(app.handle()).map_err(Into::into)
