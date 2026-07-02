@@ -38,7 +38,7 @@ export function TagEditor({ value, onChange, placeholder }: TagEditorProps) {
       {tags.map((tag, i) => (
         <span
           key={i}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-surface-2 border border-border rounded text-[11px] font-code text-text leading-none shrink-0"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-surface-2 border border-border rounded-sm text-[11px] font-code text-text leading-none shrink-0"
         >
           {tag}
           <button

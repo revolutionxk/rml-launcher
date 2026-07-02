@@ -83,7 +83,7 @@ function HomePage() {
           {LINKS.map((link) => (
             <button
               key={link.labelId}
-              className="flex items-center gap-2 px-2.5 py-2 rounded text-text-muted text-[12.5px] cursor-pointer bg-transparent border-none text-left w-full transition-[background,color] duration-120 hover:bg-surface-2 hover:text-text [&_svg]:shrink-0"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-sm text-text-muted text-[12.5px] cursor-pointer bg-transparent border-none text-left w-full transition-[background,color] duration-120 hover:bg-surface-2 hover:text-text [&_svg]:shrink-0"
               onClick={() => handleLink(link.href)}
             >
               {link.icon}

@@ -47,7 +47,7 @@ pub(crate) fn count_mods(install_dir: &Path) -> (usize, usize) {
 }
 
 pub(crate) fn loader_installed(install_dir: &Path) -> bool {
-    modloader_dir(install_dir).is_dir()
+    modloader_dir(install_dir).is_dir() || install_dir.join("rml-modloader.json").is_file()
 }
 
 #[tauri::command]

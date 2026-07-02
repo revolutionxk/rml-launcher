@@ -396,7 +396,7 @@ function VersionsPage() {
     return (
       <div key={key} style={rowStyle}>
         <div
-          className="flex h-full items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-2.5 transition-[border-color,background] duration-200 hover:border-[#2e2e2e] hover:bg-card-hover"
+          className="flex h-full items-center gap-2.5 rounded-sm border border-border bg-card px-3.5 py-2.5 transition-[border-color,background] duration-200 hover:border-[#2e2e2e] hover:bg-card-hover"
           style={
             version.isLatest
               ? {
@@ -597,17 +597,17 @@ function VersionsPage() {
       </div>
 
       {(errorMessage ?? loadErrorMessage) && (
-        <div className="mb-4 rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <div className="mb-4 rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
           {errorMessage ?? loadErrorMessage}
         </div>
       )}
 
       {isLoading ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {t("versions-loading")}
         </div>
       ) : filteredVersions.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {hasSearchQuery ? t("versions-empty-search") : t("versions-empty")}
         </div>
       ) : null}
@@ -626,7 +626,7 @@ function VersionsPage() {
       {!isLoading && filteredVersions.length > 0 && (
         <div className="min-h-0 flex-1">
           <div
-            className="h-full overflow-hidden rounded-xl border border-border bg-card/40"
+            className="h-full overflow-hidden rounded-sm border border-border bg-card/40"
             style={{ scrollbarGutter: "stable" }}
           >
             <AutoSizer>

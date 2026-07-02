@@ -19,7 +19,7 @@ function ActionButtonRoot({ onClick, disabled, className, children }: ActionButt
       disabled={disabled}
       className={cn(
         "group flex items-center gap-3.5 px-4.5 py-4",
-        "bg-card border border-border rounded",
+        "bg-card border border-border rounded-sm",
         "cursor-pointer text-left w-full relative overflow-hidden",
         "transition-[border-color,background,box-shadow] duration-200",
         "hover:bg-card-hover hover:border-border-focus",
@@ -80,7 +80,7 @@ function ActionButtonDescription({
   className?: string;
 }) {
   return (
-    <div className={cn("text-[11.5px] text-text-muted mt-0.5 truncate", className)}>
+    <div className={cn("text-[11.5px] text-text-muted mt-0.5", className)}>
       {children}
     </div>
   );

@@ -84,7 +84,7 @@ function SelectPopup({ children, className }: { children: ReactNode; className?:
   return (
     <BaseSelect.Popup
       className={cn(
-        "bg-card border border-border rounded-lg py-1",
+        "bg-card border border-border rounded-sm py-1",
         "shadow-[0_8px_32px_rgba(0,0,0,0.4)] outline-none",
         "min-w-[var(--anchor-width)] max-h-[var(--available-height)]",
         "select-popup",

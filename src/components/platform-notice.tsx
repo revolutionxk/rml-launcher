@@ -58,7 +58,7 @@ export function PlatformNotice() {
         : t("platform-notice-linux-no-vinegar");
 
   return (
-    <div className="mb-4 shrink-0 rounded-lg border border-yellow/25 bg-yellow-muted px-4 py-3">
+    <div className="mb-4 shrink-0 rounded-sm border border-yellow/25 bg-yellow-muted px-4 py-3">
       <div className="flex items-start gap-2.5">
         <Wine size={15} className="mt-0.5 shrink-0 text-yellow" />
         <div className="min-w-0 flex-1">
