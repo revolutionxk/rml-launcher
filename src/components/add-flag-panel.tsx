@@ -59,7 +59,7 @@ export function AddFlagPanel({ existingNames, onAdd, onClose }: AddFlagPanelProp
               {detectedType && (
                 <span
                   className={cn(
-                    "text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none",
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-sm leading-none",
                     FLAG_TYPE_COLORS[detectedType],
                   )}
                 >

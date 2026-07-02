@@ -49,12 +49,12 @@ function NavItem({
     <Link
       to={to}
       style={{ textDecoration: "none" }}
-      className="relative flex items-center gap-2 px-2.5 py-[6px] rounded-[5px] w-full cursor-default"
+      className="relative flex items-center gap-2 px-2.5 py-[6px] rounded-sm w-full cursor-default"
     >
       {isActive && (
         <motion.div
           layoutId="nav-pill"
-          className="absolute inset-0 rounded-[5px] bg-accent-muted"
+          className="absolute inset-0 rounded-sm bg-accent-muted"
           transition={{ type: "spring", stiffness: 500, damping: 40, mass: 0.75 }}
         />
       )}

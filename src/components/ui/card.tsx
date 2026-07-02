@@ -12,7 +12,7 @@ function CardRoot({ children, className, highlighted }: CardRootProps) {
   return (
     <div
       className={cn(
-        "bg-card border border-border rounded-lg overflow-hidden",
+        "bg-card border border-border rounded-sm overflow-hidden",
         "shadow-[var(--card-shadow)]",
         "transition-[border-color,background] duration-200",
         className,

@@ -47,7 +47,7 @@ function MenuPopup({
   return (
     <BaseMenu.Popup
       className={cn(
-        "min-w-[188px] overflow-hidden rounded-lg border border-border bg-[#101010] p-1.5",
+        "min-w-[188px] overflow-hidden rounded-sm border border-border bg-[#101010] p-1.5",
         "shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm",
         className,
       )}
@@ -67,7 +67,7 @@ function MenuItem({
   return (
     <BaseMenu.Item
       className={cn(
-        "flex cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-[12px] font-medium text-text-muted outline-none",
+        "flex cursor-default select-none items-center gap-2 rounded-sm px-2.5 py-2 text-[12px] font-medium text-text-muted outline-none",
         "transition-[background,color,opacity] duration-150 data-[highlighted]:bg-surface-2 data-[highlighted]:text-text",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-45",
         className,
