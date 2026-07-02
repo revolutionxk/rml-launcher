@@ -25,7 +25,7 @@ function RouteComponent() {
         </p>
       </div>
 
-      <div className="bg-card border border-border rounded-lg px-5 py-6 text-[13px] text-text-muted">
+      <div className="bg-card border border-border rounded-sm px-5 py-6 text-[13px] text-text-muted">
         {t("marketplace-empty")}
       </div>
     </motion.div>

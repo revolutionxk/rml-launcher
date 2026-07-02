@@ -57,7 +57,7 @@ export function VinegarStudio() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg icon-box--purple">
+          <span className="flex h-7 w-7 items-center justify-center rounded-sm icon-box--purple">
             <Wine size={15} />
           </span>
           <h1 className="text-[18px] font-semibold leading-tight tracking-[-0.018em] text-text">
@@ -75,7 +75,7 @@ export function VinegarStudio() {
       </div>
 
       {errorMessage && (
-        <div className="mb-4 shrink-0 rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <div className="mb-4 shrink-0 rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
           {errorMessage}
         </div>
       )}
@@ -83,7 +83,7 @@ export function VinegarStudio() {
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5" style={{ scrollbarGutter: "stable" }}>
         <div className="flex flex-col gap-4 pb-2">
           {isLoading ? (
-            <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+            <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
               {t("vinegar-loading")}
             </div>
           ) : !installed ? (
@@ -170,8 +170,8 @@ function SetupCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card px-6 py-12 text-center shadow-(--card-shadow)">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl icon-box--purple">
+    <div className="flex flex-col items-center gap-3 rounded-sm border border-border bg-card px-6 py-12 text-center shadow-(--card-shadow)">
+      <div className="flex h-14 w-14 items-center justify-center rounded-sm icon-box--purple">
         <Wine size={26} />
       </div>
       <div className="text-[14px] font-semibold text-text">{title}</div>

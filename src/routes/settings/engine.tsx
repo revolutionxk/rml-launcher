@@ -103,7 +103,7 @@ function ListFlagPreview({ value, onEdit }: { value: string; onEdit: () => void 
           {preview.map((tag, i) => (
             <span
               key={i}
-              className="shrink-0 inline-flex items-center px-1.5 py-0.5 bg-surface-2 border border-border rounded text-[10px] font-code text-text leading-none"
+              className="shrink-0 inline-flex items-center px-1.5 py-0.5 bg-surface-2 border border-border rounded-sm text-[10px] font-code text-text leading-none"
             >
               {tag.length > 14 ? `${tag.slice(0, 12)}\u2026` : tag}
             </span>
@@ -148,7 +148,7 @@ function ListFlagEditorModal({
         />
         <motion.div
           key="list-modal-panel"
-          className="relative z-10 w-full max-w-120 bg-card border border-border rounded-xl shadow-2xl p-5"
+          className="relative z-10 w-full max-w-120 bg-card border border-border rounded-sm shadow-2xl p-5"
           initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 6 }}
@@ -616,7 +616,7 @@ function EnginePage() {
       <div key={key} style={rowStyle}>
         <div
           className={cn(
-            "relative flex h-full items-center gap-3 overflow-hidden rounded-lg border bg-card py-2.5 pl-4 pr-2",
+            "relative flex h-full items-center gap-3 overflow-hidden rounded-sm border bg-card py-2.5 pl-4 pr-2",
             "transition-[border-color,background] duration-150",
             flag.isOverridden
               ? "border-accent/30 bg-accent-muted/6"
@@ -634,7 +634,7 @@ function EnginePage() {
               </span>
               <span
                 className={cn(
-                  "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                  "shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold leading-none",
                   FLAG_TYPE_COLORS[type],
                 )}
               >
@@ -749,7 +749,7 @@ function EnginePage() {
             transition={{ duration: 0.15 }}
             className="shrink-0 overflow-hidden"
           >
-            <div className="rounded-lg border border-red/30 bg-red/10 px-4 py-2.5 text-[12px] text-red">
+            <div className="rounded-sm border border-red/30 bg-red/10 px-4 py-2.5 text-[12px] text-red">
               {errorMessage}
             </div>
           </motion.div>
@@ -869,13 +869,13 @@ function EnginePage() {
       {view === "flags" && (
         <div className="flex min-h-0 flex-1 flex-col gap-2.5">
           {scanInfo.warning && (
-            <div className="shrink-0 rounded-lg border border-yellow/25 bg-yellow/10 px-4 py-2.5 text-[12px] text-yellow">
+            <div className="shrink-0 rounded-sm border border-yellow/25 bg-yellow/10 px-4 py-2.5 text-[12px] text-yellow">
               {t("engine-scan-warning", { message: scanInfo.warning })}
             </div>
           )}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md icon-box--blue">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm icon-box--blue">
               <Flag size={12} />
             </span>
             <span className="text-[12.5px] font-semibold text-text">{t("engine-fast-flags")}</span>
@@ -1004,16 +1004,16 @@ function EnginePage() {
         </div>
 
         {isLoading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-border bg-card/40 text-[12.5px] text-text-muted">
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border bg-card/40 text-[12.5px] text-text-muted">
             <span className="flex items-center gap-2">
               <RefreshCw size={13} className="animate-spin" />
               {t("engine-loading")}
             </span>
           </div>
         ) : filteredFlags.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-border bg-card/40 px-6 py-10">
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border bg-card/40 px-6 py-10">
             <div className="flex max-w-xs flex-col items-center gap-2.5 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl icon-box--blue">
+              <div className="flex h-12 w-12 items-center justify-center rounded-sm icon-box--blue">
                 <Flag size={22} />
               </div>
               <div className="text-[13px] font-medium text-text-muted">{t("engine-empty-title")}</div>
@@ -1024,7 +1024,7 @@ function EnginePage() {
 
         {!isLoading && filteredFlags.length > 0 && (
           <div className="min-h-0 flex-1">
-            <div className="h-full overflow-hidden rounded-xl border border-border bg-card/40">
+            <div className="h-full overflow-hidden rounded-sm border border-border bg-card/40">
               <AutoSizer>
                 {({ height, width }) => {
                   if (height <= 0 || width <= 0) return null;

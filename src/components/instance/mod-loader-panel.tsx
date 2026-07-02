@@ -193,7 +193,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
 
       <Card.Body className="flex flex-col gap-3">
         {errorMessage && (
-          <div className="rounded-md border border-red/25 bg-red-muted px-3 py-2 text-[11.5px] text-text">
+          <div className="rounded-sm border border-red/25 bg-red-muted px-3 py-2 text-[11.5px] text-text">
             {errorMessage}
           </div>
         )}

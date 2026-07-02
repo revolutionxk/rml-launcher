@@ -167,27 +167,27 @@ function InstancesPage() {
       <PlatformNotice />
 
       {errorMessage && (
-        <div className="mb-4 shrink-0 rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <div className="mb-4 shrink-0 rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
           {errorMessage}
         </div>
       )}
 
       {isLoading ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {t("instances-loading")}
         </div>
       ) : instances.length === 0 ? (
         <EmptyState onAdd={() => navigate({ to: "/settings/versions" })} t={t} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {t("instances-empty-search")}
         </div>
       ) : (
         <div
-          className="min-h-0 flex-1 overflow-y-auto pr-0.5"
+          className="min-h-0 flex-1 overflow-y-auto -mx-2 px-2 -mt-2 pt-2"
           style={{ scrollbarGutter: "stable" }}
         >
-          <div className="grid grid-cols-1 gap-3 pb-2 min-[860px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 pb-4 min-[860px]:grid-cols-2">
             {filtered.map((instance, index) => (
               <InstanceCard
                 key={instance.versionGuid}
@@ -241,7 +241,7 @@ function InstanceCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.18) }}
       onClick={onOpen}
-      className="group relative flex cursor-pointer flex-col gap-3.5 overflow-hidden rounded-xl border border-border bg-card p-4 shadow-(--card-shadow) transition-[transform,border-color,background,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-[#2e2e2e] hover:bg-card-hover hover:shadow-[0_10px_28px_rgba(0,0,0,0.28)]"
+      className="group relative flex cursor-pointer flex-col gap-3.5 overflow-hidden rounded-sm border border-border bg-card p-4 shadow-(--card-shadow) transition-[transform,border-color,background,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-[#2e2e2e] hover:bg-card-hover hover:shadow-[0_10px_28px_rgba(0,0,0,0.28)]"
       style={
         instance.isDefault
           ? {
@@ -253,7 +253,7 @@ function InstanceCard({
     >
       <div className="flex items-center gap-3">
         <div
-          className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${avatarClass}`}
+          className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-sm ${avatarClass}`}
         >
           <Package size={19} />
           <span
@@ -358,9 +358,9 @@ function EmptyState({ onAdd, t }: { onAdd: () => void; t: ReturnType<typeof useI
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-border bg-card px-6 py-12 text-center shadow-(--card-shadow)"
+        className="flex w-full max-w-sm flex-col items-center gap-3 rounded-sm border border-border bg-card px-6 py-12 text-center shadow-(--card-shadow)"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl icon-box--blue">
+        <div className="flex h-14 w-14 items-center justify-center rounded-sm icon-box--blue">
           <Package size={26} />
         </div>
         <div className="text-[14px] font-semibold text-text">{t("instances-empty-title")}</div>

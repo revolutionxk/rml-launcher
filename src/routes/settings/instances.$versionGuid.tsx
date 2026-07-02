@@ -89,7 +89,7 @@ function InstanceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+      <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
         {t("instances-loading")}
       </div>
     );
@@ -105,7 +105,7 @@ function InstanceDetailPage() {
           <ArrowLeft size={13} />
           {t("instances-back")}
         </button>
-        <div className="rounded-lg border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {t("instances-not-found")}
         </div>
       </div>
@@ -124,7 +124,7 @@ function InstanceDetailPage() {
         {t("instances-back")}
       </button>
 
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className="rounded-sm border border-border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -192,7 +192,7 @@ function InstanceDetailPage() {
       </div>
 
       {errorMessage && (
-        <div className="rounded-lg border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <div className="rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
           {errorMessage}
         </div>
       )}

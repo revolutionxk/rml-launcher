@@ -29,7 +29,7 @@ function AboutPage() {
       </div>
 
       <motion.div
-        className="flex flex-col items-center gap-3.5 p-7 text-center bg-card border border-border rounded-lg mb-3"
+        className="flex flex-col items-center gap-3.5 p-7 text-center bg-card border border-border rounded-sm mb-3"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
@@ -59,7 +59,7 @@ function AboutPage() {
         {LINKS.map((link, i) => (
           <motion.button
             key={link.labelId}
-            className="about-link-card flex items-center gap-2.5 px-4 py-3.25 bg-card border border-border rounded cursor-pointer w-full text-left transition-[background,border-color] duration-150 hover:bg-card-hover hover:border-[#333]"
+            className="about-link-card flex items-center gap-2.5 px-4 py-3.25 bg-card border border-border rounded-sm cursor-pointer w-full text-left transition-[background,border-color] duration-150 hover:bg-card-hover hover:border-[#333]"
             onClick={() => handleLink(link.href)}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
