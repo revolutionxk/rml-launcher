@@ -80,7 +80,7 @@ function ActionButtonDescription({
   className?: string;
 }) {
   return (
-    <div className={cn("text-[11.5px] text-text-muted mt-0.5 truncate", className)}>
+    <div className={cn("text-[11.5px] text-text-muted mt-0.5", className)}>
       {children}
     </div>
   );
