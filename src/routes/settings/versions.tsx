@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import {
+  ArrowLeft,
   FolderOpen,
   MoreHorizontal,
   Play,
@@ -17,8 +18,11 @@ import { AutoSizer, List, type ListRowProps } from "react-virtualized";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Input } from "@/components/ui/input";
 import { Menu } from "@/components/ui/menu";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingState } from "@/components/ui/spinner";
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/i18n";
 import { queryKeys, useStudioVersions } from "@/lib/queries";
@@ -83,7 +87,7 @@ function VersionActionsMenu({
         render={
           <Button.Root
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label={t("versions-actions")}
             disabled={isBusy}
           >
@@ -156,6 +160,7 @@ function VersionActionsMenu({
 
 function VersionsPage() {
   const { formatDate, t } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: versions = [], isLoading, isFetching, error } = useStudioVersions();
   const [activeInstall, setActiveInstall] = useState<StudioInstallProgress | null>(null);
@@ -182,9 +187,7 @@ function VersionsPage() {
       : versions;
   const hasSearchQuery = deferredSearchQuery.length > 0;
   const listKey = hasSearchQuery ? `search:${deferredSearchQuery}` : "all";
-
-  // Invalidate the cached version catalog and the instances list (which derives
-  // from it) so both refresh together after an install/uninstall/revalidate.
+  
   const refreshVersions = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.studioVersions }),
@@ -505,8 +508,7 @@ function VersionsPage() {
               <div className="flex items-center gap-1">
                 <Button.Root
                   variant="primary"
-                  size="icon"
-                  className="p-[6px]"
+                  size="icon-sm"
                   aria-label={t("versions-launch")}
                   disabled={isBusy}
                   onClick={() => {
@@ -541,14 +543,18 @@ function VersionsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-5 shrink-0">
-        <h1 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.018em] text-text">
-          {t("versions-title")}
-        </h1>
-        <p className="mt-1 text-[12.5px] leading-normal text-text-muted">
-          {t("versions-description")}
-        </p>
-      </div>
+      <button
+        className="mb-3 flex w-fit shrink-0 items-center gap-1.5 rounded-sm text-[12.5px] text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent/40"
+        onClick={() => navigate({ to: "/settings/instances" })}
+      >
+        <ArrowLeft size={13} />
+        {t("versions-back")}
+      </button>
+      <PageHeader
+        className="mb-5 shrink-0"
+        title={t("versions-title")}
+        description={t("versions-description")}
+      />
 
       <div className="mb-4 shrink-0 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
@@ -597,15 +603,13 @@ function VersionsPage() {
       </div>
 
       {(errorMessage ?? loadErrorMessage) && (
-        <div className="mb-4 rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <Callout variant="danger" className="mb-4 shrink-0">
           {errorMessage ?? loadErrorMessage}
-        </div>
+        </Callout>
       )}
 
       {isLoading ? (
-        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
-          {t("versions-loading")}
-        </div>
+        <LoadingState label={t("versions-loading")} className="shrink-0" />
       ) : filteredVersions.length === 0 ? (
         <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
           {hasSearchQuery ? t("versions-empty-search") : t("versions-empty")}

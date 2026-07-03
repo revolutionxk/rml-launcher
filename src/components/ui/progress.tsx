@@ -50,7 +50,6 @@ function ProgressIndicator({ className }: { className?: string }) {
         "data-[indeterminate]:animate-progress-indeterminate",
         className,
       )}
-      style={{ width: "var(--progress-value, 0%)" }}
     />
   );
 }

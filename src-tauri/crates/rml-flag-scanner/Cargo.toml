@@ -1,0 +1,10 @@
+[package]
+name = "rml-flag-scanner"
+version = "0.1.0"
+edition = "2021"
+description = "Extracts Roblox Studio Fast Flag names from the Studio binary and its bundled Lua."
+
+[dependencies]
+goblin = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }

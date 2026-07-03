@@ -6,19 +6,30 @@ mod storage;
 
 use std::path::Path;
 
-use anyhow::Result;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::studio::installed_studio_target;
+use crate::{studio::installed_studio_target, AppError, CommandResult, Paths};
 
 use self::{
-    installer::{install_release, remove_from_install_dir},
+    installer::{install_release, remove_from_install_dir, InstallProgressSink, INSTALL_EVENT},
+    model::ModLoaderInstallProgress,
+    paths::release_cache_dir,
     storage::{load_manifest, remove_manifest},
 };
 
 pub use self::model::{ModLoaderInstalled, ModLoaderRelease};
+
+struct EventSink<'a> {
+    app: &'a AppHandle,
+}
+
+impl InstallProgressSink for EventSink<'_> {
+    fn report(&self, progress: ModLoaderInstallProgress) {
+        let _ = self.app.emit(INSTALL_EVENT, progress);
+    }
+}
 
 #[derive(Default)]
 pub struct ModLoaderState {
@@ -26,18 +37,18 @@ pub struct ModLoaderState {
 }
 
 #[tauri::command]
-pub async fn list_modloader_releases() -> Result<Vec<ModLoaderRelease>, String> {
-    api::fetch_releases().await.map_err(|error| error.to_string())
+pub async fn list_modloader_releases() -> CommandResult<Vec<ModLoaderRelease>> {
+    Ok(api::fetch_releases().await?)
 }
 
 #[tauri::command]
 pub async fn get_modloader_status(
     app: AppHandle,
     version_guid: String,
-) -> Result<Option<ModLoaderInstalled>, String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
+) -> CommandResult<Option<ModLoaderInstalled>> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
 
-    load_manifest(&install_dir).map_err(|error| error.to_string())
+    Ok(load_manifest(&install_dir)?)
 }
 
 #[tauri::command]
@@ -46,20 +57,20 @@ pub async fn install_modloader(
     state: State<'_, ModLoaderState>,
     version_guid: String,
     tag: String,
-) -> Result<ModLoaderInstalled, String> {
+) -> CommandResult<ModLoaderInstalled> {
     let _guard = state
         .install_lock
         .try_lock()
-        .map_err(|_| "A mod loader operation is already in progress.".to_string())?;
+        .map_err(|_| AppError::Failed("A mod loader operation is already in progress.".into()))?;
 
     info!(version_guid, tag, "installing mod loader release into Studio version");
 
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
-    let release = api::fetch_release(&tag).await.map_err(|error| error.to_string())?;
+    let install_dir = installed_studio_target(&app, &version_guid)?;
+    let release = api::fetch_release(&tag).await?;
+    let cache_dir = release_cache_dir(&Paths::resolve(&app)?, &release.tag);
 
-    let manifest = install_release(&app, &release, &version_guid, &install_dir)
-        .await
-        .map_err(|error| error.to_string())?;
+    let sink = EventSink { app: &app };
+    let manifest = install_release(&sink, cache_dir, &release, &version_guid, &install_dir).await?;
 
     set_vinegar_dwmapi_override(&version_guid, true);
 
@@ -71,24 +82,20 @@ pub async fn uninstall_modloader(
     app: AppHandle,
     state: State<'_, ModLoaderState>,
     version_guid: String,
-) -> Result<(), String> {
+) -> CommandResult<()> {
     let _guard = state
         .install_lock
         .try_lock()
-        .map_err(|_| "A mod loader operation is already in progress.".to_string())?;
+        .map_err(|_| AppError::Failed("A mod loader operation is already in progress.".into()))?;
 
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
+    let install_dir = installed_studio_target(&app, &version_guid)?;
 
-    let Some(manifest) = load_manifest(&install_dir).map_err(|error| error.to_string())? else {
+    let Some(manifest) = load_manifest(&install_dir)? else {
         return Ok(());
     };
 
-    remove_from_install_dir(&install_dir, &manifest.artifacts)
-        .await
-        .map_err(|error| error.to_string())?;
-    remove_manifest(&install_dir)
-        .await
-        .map_err(|error| error.to_string())?;
+    remove_from_install_dir(&install_dir, &manifest.artifacts).await?;
+    remove_manifest(&install_dir).await?;
 
     set_vinegar_dwmapi_override(&version_guid, false);
 

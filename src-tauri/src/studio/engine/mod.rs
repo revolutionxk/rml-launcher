@@ -15,6 +15,8 @@ use serde_json::{Map, Number, Value};
 use tauri::AppHandle;
 use tokio::fs as tokio_fs;
 
+use crate::{AppError, CommandResult, Paths};
+
 use super::{
     api::same_version_guid,
     paths::version_manifest_path,
@@ -59,61 +61,58 @@ struct CatalogEntry {
 }
 
 #[tauri::command]
-pub async fn get_engine_state(app: AppHandle) -> Result<EngineStateResponse, String> {
-    build_engine_state(&app, false)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn get_engine_state(app: AppHandle) -> CommandResult<EngineStateResponse> {
+    let paths = Paths::resolve(&app)?;
+    Ok(build_engine_state(&paths, false).await?)
 }
 
 #[tauri::command]
-pub async fn rescan_engine_flags(app: AppHandle) -> Result<EngineStateResponse, String> {
-    build_engine_state(&app, true)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn rescan_engine_flags(app: AppHandle) -> CommandResult<EngineStateResponse> {
+    let paths = Paths::resolve(&app)?;
+    Ok(build_engine_state(&paths, true).await?)
 }
 
 #[tauri::command]
 pub async fn set_engine_target_version(
     app: AppHandle,
     version_guid: Option<String>,
-) -> Result<EngineStateResponse, String> {
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
+) -> CommandResult<EngineStateResponse> {
+    let paths = Paths::resolve(&app)?;
+    let mut preferences = load_preferences(&paths)?;
 
     preferences.selected_target_version_guid = match version_guid {
         Some(version_guid) => {
-            let installed_targets = resolve_installed_targets(&app).map_err(|error| error.to_string())?;
+            let installed_targets = resolve_installed_targets(&paths)?;
             let target = installed_targets
                 .into_iter()
                 .find(|target| same_version_guid(&target.version_guid, &version_guid))
-                .ok_or_else(|| "The selected Studio engine target is not installed.".to_string())?;
+                .ok_or_else(|| {
+                    AppError::Failed("The selected Studio engine target is not installed.".into())
+                })?;
 
             Some(target.version_guid)
         }
         None => None,
     };
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
+    save_preferences(&paths, &preferences).await?;
 
-    build_engine_state(&app, false)
-        .await
-        .map_err(|error| error.to_string())
+    Ok(build_engine_state(&paths, false).await?)
 }
 
 #[tauri::command]
 pub async fn apply_engine_state_patch(
     app: AppHandle,
     patch: EngineStatePatch,
-) -> Result<EngineStateResponse, String> {
+) -> CommandResult<EngineStateResponse> {
+    let paths = Paths::resolve(&app)?;
     let normalized_overrides = patch
         .overrides
         .into_iter()
         .map(normalize_override_input)
-        .collect::<Result<Vec<_>>>()
-        .map_err(|error| error.to_string())?;
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
-    let active_target_guid = resolve_active_target_guid(&app, &preferences).map_err(|error| error.to_string())?;
+        .collect::<Result<Vec<_>>>()?;
+    let mut preferences = load_preferences(&paths)?;
+    let active_target_guid = resolve_active_target_guid(&paths, &preferences)?;
     let profile = active_profile_mut(&mut preferences, active_target_guid.as_deref());
 
     if patch.replace_all {
@@ -132,16 +131,10 @@ pub async fn apply_engine_state_patch(
         profile.overrides.insert(name, override_entry);
     }
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
-    sync_preferences_to_installed_versions(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
+    save_preferences(&paths, &preferences).await?;
+    sync_preferences_to_installed_versions(&paths, &preferences).await?;
 
-    build_engine_state(&app, false)
-        .await
-        .map_err(|error| error.to_string())
+    Ok(build_engine_state(&paths, false).await?)
 }
 
 #[tauri::command]
@@ -150,12 +143,12 @@ pub async fn upsert_engine_flag_override(
     name: String,
     value: String,
     custom: Option<bool>,
-) -> Result<(), String> {
-    let normalized_name = normalize_flag_name(&name).map_err(|error| error.to_string())?;
-    let normalized_value = normalize_flag_value(&normalized_name, &value)
-        .map_err(|error| error.to_string())?;
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
-    let active_target_guid = resolve_active_target_guid(&app, &preferences).map_err(|error| error.to_string())?;
+) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let normalized_name = normalize_flag_name(&name)?;
+    let normalized_value = normalize_flag_value(&normalized_name, &value)?;
+    let mut preferences = load_preferences(&paths)?;
+    let active_target_guid = resolve_active_target_guid(&paths, &preferences)?;
     let profile = active_profile_mut(&mut preferences, active_target_guid.as_deref());
 
     profile.overrides.insert(
@@ -166,43 +159,33 @@ pub async fn upsert_engine_flag_override(
         },
     );
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
-    sync_preferences_to_installed_versions(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())
+    save_preferences(&paths, &preferences).await?;
+    Ok(sync_preferences_to_installed_versions(&paths, &preferences).await?)
 }
 
 #[tauri::command]
-pub async fn remove_engine_flag_override(app: AppHandle, name: String) -> Result<(), String> {
-    let normalized_name = normalize_flag_name(&name).map_err(|error| error.to_string())?;
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
-    let active_target_guid = resolve_active_target_guid(&app, &preferences).map_err(|error| error.to_string())?;
+pub async fn remove_engine_flag_override(app: AppHandle, name: String) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let normalized_name = normalize_flag_name(&name)?;
+    let mut preferences = load_preferences(&paths)?;
+    let active_target_guid = resolve_active_target_guid(&paths, &preferences)?;
     let profile = active_profile_mut(&mut preferences, active_target_guid.as_deref());
     profile.overrides.remove(&normalized_name);
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
-    sync_preferences_to_installed_versions(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())
+    save_preferences(&paths, &preferences).await?;
+    Ok(sync_preferences_to_installed_versions(&paths, &preferences).await?)
 }
 
 #[tauri::command]
-pub async fn clear_engine_flag_overrides(app: AppHandle) -> Result<(), String> {
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
-    let active_target_guid = resolve_active_target_guid(&app, &preferences).map_err(|error| error.to_string())?;
+pub async fn clear_engine_flag_overrides(app: AppHandle) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let mut preferences = load_preferences(&paths)?;
+    let active_target_guid = resolve_active_target_guid(&paths, &preferences)?;
     let profile = active_profile_mut(&mut preferences, active_target_guid.as_deref());
     profile.overrides.clear();
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
-    sync_preferences_to_installed_versions(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())
+    save_preferences(&paths, &preferences).await?;
+    Ok(sync_preferences_to_installed_versions(&paths, &preferences).await?)
 }
 
 #[tauri::command]
@@ -210,36 +193,33 @@ pub async fn set_engine_general_settings(
     app: AppHandle,
     enable_tracking: bool,
     disable_telemetry: bool,
-) -> Result<(), String> {
-    let mut preferences = load_preferences(&app).map_err(|error| error.to_string())?;
-    let active_target_guid = resolve_active_target_guid(&app, &preferences).map_err(|error| error.to_string())?;
+) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let mut preferences = load_preferences(&paths)?;
+    let active_target_guid = resolve_active_target_guid(&paths, &preferences)?;
     let profile = active_profile_mut(&mut preferences, active_target_guid.as_deref());
     profile.enable_tracking = enable_tracking;
     profile.disable_telemetry = disable_telemetry;
 
-    save_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())?;
-    sync_preferences_to_installed_versions(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())
+    save_preferences(&paths, &preferences).await?;
+    Ok(sync_preferences_to_installed_versions(&paths, &preferences).await?)
 }
 
 pub(crate) async fn apply_saved_preferences_to_install_dir(
-    app: &AppHandle,
+    paths: &Paths,
     install_dir: &Path,
 ) -> Result<()> {
-    let preferences = load_preferences(app)?;
+    let preferences = load_preferences(paths)?;
     let target_version_guid = read_target_version_guid_from_install_dir(install_dir)?;
     let profile = active_profile(&preferences, Some(&target_version_guid));
 
     apply_preferences_to_install_dir(install_dir, profile).await
 }
 
-async fn build_engine_state(app: &AppHandle, force_rescan: bool) -> Result<EngineStateResponse> {
-    let preferences = load_preferences(app)?;
+async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineStateResponse> {
+    let preferences = load_preferences(paths)?;
     let remote_defaults = fetch_remote_defaults().await.unwrap_or_default();
-    let installed_targets = resolve_installed_targets(app)?;
+    let installed_targets = resolve_installed_targets(paths)?;
     let target = resolve_target_version(&preferences, &installed_targets);
     let active_profile = active_profile(&preferences, target.as_ref().map(|entry| entry.version_guid.as_str()));
     let selected_target_version_guid = preferences.selected_target_version_guid.as_ref().and_then(
@@ -261,7 +241,7 @@ async fn build_engine_state(app: &AppHandle, force_rescan: bool) -> Result<Engin
     let mut scanned_flags = Vec::new();
 
     if let Some(target) = target.as_ref() {
-        match get_scan_cache_for_target(app, target, force_rescan).await {
+        match get_scan_cache_for_target(paths, target, force_rescan).await {
             Ok(Some(cache)) => {
                 last_scanned_at = Some(cache.scanned_at.clone());
                 last_scanned_version_guid = Some(cache.version_guid.clone());
@@ -388,12 +368,12 @@ fn build_flag_records(
 }
 
 async fn get_scan_cache_for_target(
-    app: &AppHandle,
+    paths: &Paths,
     target: &InstalledTarget,
     force_rescan: bool,
 ) -> Result<Option<EngineScanCache>> {
     if !force_rescan {
-        if let Some(cache) = load_scan_cache(app, &target.version_guid)? {
+        if let Some(cache) = load_scan_cache(paths, &target.version_guid)? {
             return Ok(Some(cache));
         }
     }
@@ -411,7 +391,7 @@ async fn get_scan_cache_for_target(
         flags,
     };
 
-    save_scan_cache(app, &cache).await?;
+    save_scan_cache(paths, &cache).await?;
 
     Ok(Some(cache))
 }
@@ -449,9 +429,9 @@ fn stringify_setting_value(value: &Value) -> String {
     }
 }
 
-fn resolve_installed_targets(app: &AppHandle) -> Result<Vec<InstalledTarget>> {
-    let studio_preferences = load_studio_preferences(app).unwrap_or_default();
-    let mut installed_versions = discover_installed_versions(app)?;
+fn resolve_installed_targets(paths: &Paths) -> Result<Vec<InstalledTarget>> {
+    let studio_preferences = load_studio_preferences(paths).unwrap_or_default();
+    let mut installed_versions = discover_installed_versions(paths)?;
     installed_versions.retain(|version| {
         version.install_dir.is_some() && version.executable_path.is_some() && version.is_installed
     });
@@ -509,8 +489,8 @@ fn resolve_target_version(
     installed_targets.first().cloned()
 }
 
-fn resolve_active_target_guid(app: &AppHandle, preferences: &EnginePreferences) -> Result<Option<String>> {
-    let installed_targets = resolve_installed_targets(app)?;
+fn resolve_active_target_guid(paths: &Paths, preferences: &EnginePreferences) -> Result<Option<String>> {
+    let installed_targets = resolve_installed_targets(paths)?;
 
     Ok(resolve_target_version(preferences, &installed_targets).map(|target| target.version_guid))
 }
@@ -545,10 +525,10 @@ fn active_profile_mut<'a>(
 }
 
 async fn sync_preferences_to_installed_versions(
-    app: &AppHandle,
+    paths: &Paths,
     preferences: &EnginePreferences,
 ) -> Result<()> {
-    for target in resolve_installed_targets(app)? {
+    for target in resolve_installed_targets(paths)? {
         let profile = active_profile(preferences, Some(&target.version_guid));
         apply_preferences_to_install_dir(&target.install_dir, profile).await?;
     }

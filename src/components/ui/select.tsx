@@ -30,7 +30,7 @@ function SelectTrigger({
       {...props}
       className={cn(
         "inline-flex items-center justify-between gap-2",
-        "px-3 py-[7px] rounded-sm text-[13px]",
+        "h-8 px-3 rounded-sm text-[13px]",
         "bg-surface border border-border text-text",
         "cursor-pointer transition-[border-color,background] duration-150",
         "hover:border-[#333] hover:bg-surface-2",
@@ -147,7 +147,7 @@ function SelectItem({ value, disabled, children, className }: SelectItemProps) {
       value={value}
       disabled={disabled}
       className={cn(
-        "flex items-center gap-2 px-3 py-[7px] mx-1 rounded-sm",
+        "group flex items-center gap-2 px-3 py-[7px] mx-1 rounded-sm",
         "text-[12.5px] text-text cursor-pointer outline-none",
         "transition-[background] duration-100",
         "data-[highlighted]:bg-surface-2",
@@ -157,7 +157,7 @@ function SelectItem({ value, disabled, children, className }: SelectItemProps) {
       )}
     >
       <BaseSelect.ItemIndicator
-        className="w-4 shrink-0 flex items-center justify-center data-[hidden]:invisible"
+        className="flex w-4 shrink-0 items-center justify-center opacity-0 transition-opacity duration-100 group-data-selected:opacity-100"
         keepMounted
       >
         <Check size={11} />

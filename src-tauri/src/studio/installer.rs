@@ -8,20 +8,26 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use futures_util::StreamExt;
 use md5::{Digest, Md5};
-use tauri::{AppHandle, Emitter};
+use std::path::PathBuf;
 use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 use tracing::{error, info, warn};
 
 use super::{
     api::{fetch_package_manifest, http_client, package_url, send_get_request_with_retry},
-    config::{binary_target, package_extract_root, APP_SETTINGS_XML, OAUTH2_CONFIG_JSON, STUDIO_INSTALL_EVENT},
+    config::{binary_target, package_extract_root, APP_SETTINGS_XML, OAUTH2_CONFIG_JSON},
     model::{InstallPhase, InstalledStudioManifest, PackageManifestEntry, StudioInstallProgress},
-    paths::{version_download_dir, version_executable_path, version_install_dir, version_manifest_path},
+    paths::{version_executable_path, version_manifest_path},
     storage::{read_installed_manifest, write_installed_manifest},
 };
 
-pub async fn install_version(
-    app: &AppHandle,
+pub trait StudioProgressSink {
+    fn report(&self, progress: StudioInstallProgress);
+}
+
+pub async fn install_version<S: StudioProgressSink>(
+    sink: &S,
+    install_dir: PathBuf,
+    download_dir: PathBuf,
     version_guid: &str,
     version: &str,
     channel: &str,
@@ -33,15 +39,13 @@ pub async fn install_version(
     let version = version.to_string();
     let failed_version_guid = version_guid.clone();
     let failed_version = version.clone();
-    let install_dir = version_install_dir(app, &version_guid)?;
     let manifest_path = version_manifest_path(&install_dir);
 
     if manifest_path.exists() {
         return read_installed_manifest(&manifest_path);
     }
 
-    let download_dir = version_download_dir(app, &version_guid)?;
-    let reporter = ProgressReporter::new(app, &version_guid, &version, channel);
+    let reporter = ProgressReporter::new(sink, &version_guid, &version, channel);
 
     let install_result: Result<InstalledStudioManifest> = async {
         reporter.emit(InstallPhase::Resolving, None, 0, 0, 0, 0, None);
@@ -163,10 +167,13 @@ pub async fn install_version(
     }
 }
 
-pub async fn revalidate_version(app: &AppHandle, version_guid: &str) -> Result<InstalledStudioManifest> {
+pub async fn revalidate_version(
+    install_dir: PathBuf,
+    downloads_root: PathBuf,
+    version_guid: &str,
+) -> Result<InstalledStudioManifest> {
     info!(version_guid, "starting Studio revalidation");
 
-    let install_dir = version_install_dir(app, version_guid)?;
     let manifest_path = version_manifest_path(&install_dir);
 
     if !manifest_path.exists() {
@@ -175,7 +182,7 @@ pub async fn revalidate_version(app: &AppHandle, version_guid: &str) -> Result<I
 
     let mut manifest = read_installed_manifest(&manifest_path)?;
     let version_major = parse_version_major(&manifest.version)?;
-    let download_dir = version_download_dir(app, &manifest.version_guid)?;
+    let download_dir = downloads_root.join(&manifest.version_guid);
     let packages = fetch_package_manifest(&manifest.version_guid).await?;
 
     tokio_fs::create_dir_all(&download_dir)
@@ -197,11 +204,11 @@ pub async fn revalidate_version(app: &AppHandle, version_guid: &str) -> Result<I
     Ok(manifest)
 }
 
-async fn download_package(
+async fn download_package<S: StudioProgressSink>(
     package: &PackageManifestEntry,
     version_guid: &str,
     archive_path: &Path,
-    reporter: &ProgressReporter<'_>,
+    reporter: &ProgressReporter<'_, S>,
     downloaded_bytes: &mut u64,
     total_download_bytes: u64,
     total_packages: usize,
@@ -747,23 +754,24 @@ fn parse_version_major(version: &str) -> Result<u32> {
         .with_context(|| format!("invalid Roblox version format: {version}"))
 }
 
-struct ProgressReporter<'a> {
-    app: &'a AppHandle,
+struct ProgressReporter<'a, S: StudioProgressSink> {
+    sink: &'a S,
     version_guid: String,
     version: String,
     channel: String,
 }
 
-impl<'a> ProgressReporter<'a> {
-    fn new(app: &'a AppHandle, version_guid: &str, version: &str, channel: &str) -> Self {
+impl<'a, S: StudioProgressSink> ProgressReporter<'a, S> {
+    fn new(sink: &'a S, version_guid: &str, version: &str, channel: &str) -> Self {
         Self {
-            app,
+            sink,
             version_guid: version_guid.to_string(),
             version: version.to_string(),
             channel: channel.to_string(),
         }
     }
-
+    
+    #[allow(clippy::too_many_arguments)]
     fn emit(
         &self,
         phase: InstallPhase,
@@ -794,7 +802,7 @@ impl<'a> ProgressReporter<'a> {
             error,
         };
 
-        let _ = self.app.emit(STUDIO_INSTALL_EVENT, payload);
+        self.sink.report(payload);
     }
 }
 

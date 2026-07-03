@@ -6,9 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/i18n";
 import { formatBytes, getErrorMessage } from "@/lib/format";
 import {
@@ -21,6 +23,7 @@ import {
   uninstallModLoader,
 } from "@/lib/modloader";
 import { queryKeys, useModLoaderReleases } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 const CHANNEL_VARIANTS: Record<ModLoaderChannel, "blue" | "green" | "yellow" | "purple" | "gray"> =
   {
@@ -45,6 +48,8 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
   const [isUninstalling, setIsUninstalling] = useState(false);
   const [activeInstall, setActiveInstall] = useState<ModLoaderInstallProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const [manage, setManage] = useState(false);
 
   const isInstalling =
     activeInstall !== null &&
@@ -108,13 +113,14 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
     ]);
   };
 
-  const handleInstall = async () => {
-    if (!selectedRelease) {
+  const handleInstall = async (tag?: string) => {
+    const target = tag ?? selectedRelease?.tag;
+    if (!target) {
       return;
     }
     setErrorMessage(null);
     try {
-      await installModLoader(versionGuid, selectedRelease.tag);
+      await installModLoader(versionGuid, target);
       await invalidate();
     } catch (error) {
       setErrorMessage(
@@ -145,6 +151,8 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
   };
 
   const updateAvailable = isModLoaderUpdateAvailable(installed, selectedRelease);
+  const latestRelease = releases[0] ?? null;
+  const hasUpdate = isModLoaderUpdateAvailable(installed, latestRelease);
   const isSelectedInstalled = installed !== null && selectedRelease?.tag === installed?.tag;
   const installLabel = !isSelectedInstalled
     ? t("modloader-install")
@@ -156,6 +164,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
       ? Math.round(activeInstall.progress)
       : null;
   const phaseLabel = activeInstall ? t(`modloader-phase-${activeInstall.phase}`) : "";
+  const collapsed = installed !== null && !manage && !isBusy && !activeInstall && !errorMessage;
 
   return (
     <Card.Root highlighted={installed !== null}>
@@ -171,7 +180,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
                 <Badge.Label>{t("modloader-badge-installed")}</Badge.Label>
               </Badge.Root>
             )}
-            {updateAvailable && (
+            {hasUpdate && (
               <Badge.Root variant="yellow">
                 <Badge.Label>{t("modloader-badge-update")}</Badge.Label>
               </Badge.Root>
@@ -192,16 +201,50 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
       </Card.Header>
 
       <Card.Body className="flex flex-col gap-3">
-        {errorMessage && (
-          <div className="rounded-sm border border-red/25 bg-red-muted px-3 py-2 text-[11.5px] text-text">
-            {errorMessage}
-          </div>
-        )}
+        {errorMessage && <Callout variant="danger">{errorMessage}</Callout>}
 
         {isLoading ? (
-          <div className="text-[12px] text-text-muted">{t("modloader-loading")}</div>
+          <div className="flex items-center gap-2 text-[12px] text-text-muted">
+            <Spinner size={12} />
+            {t("modloader-loading")}
+          </div>
         ) : releases.length === 0 ? (
           <div className="text-[12px] text-text-muted">{t("modloader-empty")}</div>
+        ) : collapsed && installed ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm icon-box--green">
+              <ShieldCheck size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12.5px] font-medium text-text">{installed.name}</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    hasUpdate ? "bg-yellow" : "bg-green",
+                  )}
+                />
+                <span>{hasUpdate ? t("modloader-badge-update") : t("modloader-up-to-date")}</span>
+                <span className="text-text-dim">·</span>
+                <span className="tabular-nums">{formatDate(installed.installedAt)}</span>
+              </div>
+            </div>
+            {hasUpdate && latestRelease && (
+              <Button.Root
+                variant="primary"
+                size="sm"
+                onClick={() => void handleInstall(latestRelease.tag)}
+              >
+                <Button.Icon>
+                  <RefreshCw size={13} />
+                </Button.Icon>
+                <Button.Label>{t("modloader-update")}</Button.Label>
+              </Button.Root>
+            )}
+            <Button.Root variant="ghost" size="sm" onClick={() => setManage(true)}>
+              <Button.Label>{t("modloader-manage")}</Button.Label>
+            </Button.Root>
+          </div>
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
@@ -309,6 +352,12 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
                     <ExternalLink size={13} />
                   </Button.Icon>
                   <Button.Label>{t("modloader-view-release")}</Button.Label>
+                </Button.Root>
+              )}
+
+              {installed && (
+                <Button.Root variant="ghost" disabled={isBusy} onClick={() => setManage(false)}>
+                  <Button.Label>{t("modloader-hide")}</Button.Label>
                 </Button.Root>
               )}
 

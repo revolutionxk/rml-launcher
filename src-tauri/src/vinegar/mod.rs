@@ -9,6 +9,8 @@ use serde_json::{Map, Value};
 use toml_edit::{value as toml_value, DocumentMut, Item, Table, Value as TomlValue};
 use tracing::info;
 
+use crate::{AppError, CommandResult};
+
 
 pub const INSTANCE_ID: &str = "vinegar";
 const FLATPAK_APP_ID: &str = "org.vinegarhq.Vinegar";
@@ -58,36 +60,32 @@ pub fn vinegar_status() -> VinegarStatus {
 }
 
 #[tauri::command]
-pub async fn install_vinegar() -> Result<(), String> {
+pub async fn install_vinegar() -> CommandResult<()> {
     if !cfg!(target_os = "linux") {
-        return Err("Vinegar is only available on Linux.".to_string());
+        return Err(AppError::unsupported("Vinegar is only available on Linux."));
     }
 
     if !binary_on_path("flatpak") {
-        return Err("Flatpak is required to install Vinegar. Install Flatpak first.".to_string());
+        return Err(AppError::Failed(
+            "Flatpak is required to install Vinegar. Install Flatpak first.".into(),
+        ));
     }
 
-    tokio::task::spawn_blocking(install_vinegar_blocking)
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(tokio::task::spawn_blocking(install_vinegar_blocking).await??)
 }
 
 #[tauri::command]
-pub async fn launch_vinegar() -> Result<(), String> {
+pub async fn launch_vinegar() -> CommandResult<()> {
     if !cfg!(target_os = "linux") {
-        return Err("Vinegar is only available on Linux.".to_string());
+        return Err(AppError::unsupported("Vinegar is only available on Linux."));
     }
 
     let status = detect();
     if !status.installed {
-        return Err("Vinegar is not installed.".to_string());
+        return Err(AppError::Failed("Vinegar is not installed.".into()));
     }
 
-    tokio::task::spawn_blocking(move || launch_blocking(status.kind))
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(tokio::task::spawn_blocking(move || launch_blocking(status.kind)).await??)
 }
 
 fn install_vinegar_blocking() -> Result<()> {

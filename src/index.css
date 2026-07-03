@@ -119,6 +119,12 @@ html[data-theme-transitioning] * {
   --sidebar-w: 200px;
 }
 
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-w: 176px;
+  }
+}
+
 @layer base {
   *,
   *::before,
@@ -380,6 +386,23 @@ html[data-theme-transitioning] * {
   }
 }
 
+.card-header,
+.card-body,
+.setting-row {
+  transition: padding 0.18s ease;
+}
+html[data-compact] .card-header {
+  padding-top: 9px;
+  padding-bottom: 7px;
+}
+html[data-compact] .card-body {
+  padding: 10px 14px;
+}
+html[data-compact] .setting-row {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -391,6 +414,48 @@ html[data-theme-transitioning] * {
 }
 .animate-pulse-dot {
   animation: pulse-dot 1.2s infinite;
+}
+
+@keyframes bootstrapper-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+.animate-bootstrapper-slide {
+  animation: bootstrapper-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    width: 35%;
+    transform: translateX(-120%);
+  }
+  100% {
+    width: 35%;
+    transform: translateX(340%);
+  }
+}
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-spin {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 .select-popup {
@@ -422,9 +487,6 @@ html[data-theme-transitioning] * {
   transform: scale(0.94) translateY(3px);
 }
 
-[data-progress-indicator] {
-  width: calc(var(--value, 0) * 1%);
-}
 
 [data-orientation="horizontal"] {
   display: flex;

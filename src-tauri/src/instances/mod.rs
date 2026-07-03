@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
 use serde::Serialize;
 use tauri::AppHandle;
 
@@ -8,6 +7,7 @@ use crate::{
     modloader::{installed_manifest, ModLoaderInstalled},
     mods::count_mods,
     studio::{installed_instances, StudioVersionEntry},
+    CommandResult,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -22,8 +22,8 @@ pub struct InstanceSummary {
 }
 
 #[tauri::command]
-pub async fn list_instances(app: AppHandle) -> Result<Vec<InstanceSummary>, String> {
-    let versions = installed_instances(&app).map_err(|error| error.to_string())?;
+pub async fn list_instances(app: AppHandle) -> CommandResult<Vec<InstanceSummary>> {
+    let versions = installed_instances(&app)?;
 
     Ok(versions.into_iter().map(build_summary).collect())
 }

@@ -3393,16 +3393,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rml-flag-scanner"
+version = "0.1.0"
+dependencies = [
+ "goblin",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "rml-launcher"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
  "futures-util",
- "goblin",
  "md-5",
- "regex",
  "reqwest 0.12.28",
+ "rml-flag-scanner",
  "serde",
  "serde_json",
  "sha2",
@@ -3410,11 +3418,14 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "thiserror 2.0.18",
  "tokio",
  "toml_edit 0.22.27",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "winreg",
  "zip",
 ]
 
@@ -4326,6 +4337,21 @@ dependencies = [
  "thiserror 2.0.18",
  "url",
  "windows",
+ "zbus",
+]
+
+[[package]]
+name = "tauri-plugin-single-instance"
+version = "2.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8f29386f5e9fdc699182388a33ee80a56de436d91b67459e86afef426282af"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.18",
+ "tracing",
+ "windows-sys 0.60.2",
  "zbus",
 ]
 

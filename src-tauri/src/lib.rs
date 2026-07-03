@@ -1,12 +1,20 @@
+mod error;
 mod instances;
 mod logging;
 mod modloader;
 mod mods;
+mod paths;
 mod platform;
+mod protocol;
+mod startup;
+mod store;
 mod studio;
 mod vinegar;
 
 pub mod i18n;
+
+pub(crate) use error::{AppError, CommandResult};
+pub(crate) use paths::Paths;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,8 +22,15 @@ pub fn run() {
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            startup::handle_second_instance(app, argv);
+        }))
         .setup(|app| {
-            logging::init(app.handle()).map_err(Into::into)
+            if let Err(error) = logging::init(app.handle()) {
+                return Err(error.into());
+            }
+
+            Ok(())
         })
         .manage(studio::StudioState::default())
         .manage(modloader::ModLoaderState::default())
@@ -49,6 +64,10 @@ pub fn run() {
             mods::open_mods_dir,
             instances::list_instances,
             platform::get_host_info,
+            protocol::set_studio_protocol_handler,
+            protocol::studio_protocol_status,
+            startup::create_quick_launch_shortcut,
+            startup::get_startup_options,
             vinegar::vinegar_status,
             vinegar::install_vinegar,
             vinegar::launch_vinegar,

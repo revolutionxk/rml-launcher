@@ -52,7 +52,7 @@ function SegmentGroupItem({ value, disabled, className, children }: SegmentGroup
       disabled={disabled}
       className={cn(
         "relative flex-1 flex items-center justify-center gap-2",
-        "py-2.5 rounded-sm text-[12.5px] font-medium",
+        "h-8 rounded-sm text-[12.5px] font-medium leading-none",
         "cursor-pointer border transition-all duration-150 outline-none",
         "focus-visible:ring-2 focus-visible:ring-accent/40",
         "border-border bg-surface text-text-muted hover:border-text-dim hover:text-text",

@@ -1,16 +1,19 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use tauri::AppHandle;
-use tokio::fs as tokio_fs;
+
+use crate::{
+    store::{read_json, write_json},
+    Paths,
+};
 
 use super::{
     model::{InstalledStudioManifest, StudioPreferences, StudioVersionEntry},
     paths::{settings_path, version_executable_path, version_manifest_path, versions_dir},
 };
 
-pub fn discover_installed_versions(app: &AppHandle) -> Result<Vec<StudioVersionEntry>> {
-    let versions_dir = versions_dir(app)?;
+pub fn discover_installed_versions(paths: &Paths) -> Result<Vec<StudioVersionEntry>> {
+    let versions_dir = versions_dir(paths);
 
     if !versions_dir.exists() {
         return Ok(Vec::new());
@@ -51,50 +54,17 @@ pub fn discover_installed_versions(app: &AppHandle) -> Result<Vec<StudioVersionE
 }
 
 pub fn read_installed_manifest(path: &Path) -> Result<InstalledStudioManifest> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let manifest = serde_json::from_slice(&bytes)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-
-    Ok(manifest)
+    read_json(path)?.with_context(|| format!("{} does not contain a Studio manifest", path.display()))
 }
 
-pub fn load_studio_preferences(app: &AppHandle) -> Result<StudioPreferences> {
-    let path = settings_path(app)?;
-
-    if !path.exists() {
-        return Ok(StudioPreferences::default());
-    }
-
-    let bytes = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let preferences = serde_json::from_slice(&bytes)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-
-    Ok(preferences)
+pub fn load_studio_preferences(paths: &Paths) -> Result<StudioPreferences> {
+    Ok(read_json(&settings_path(paths))?.unwrap_or_default())
 }
 
-pub async fn save_studio_preferences(app: &AppHandle, preferences: &StudioPreferences) -> Result<()> {
-    let path = settings_path(app)?;
-
-    if let Some(parent) = path.parent() {
-        tokio_fs::create_dir_all(parent)
-            .await
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(preferences)
-        .context("failed to serialize the Studio preferences")?;
-    tokio_fs::write(&path, bytes)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))?;
-
-    Ok(())
+pub async fn save_studio_preferences(paths: &Paths, preferences: &StudioPreferences) -> Result<()> {
+    write_json(&settings_path(paths), preferences).await
 }
 
 pub async fn write_installed_manifest(path: &Path, manifest: &InstalledStudioManifest) -> Result<()> {
-    let bytes = serde_json::to_vec_pretty(manifest).context("failed to serialize the Studio manifest")?;
-    tokio_fs::write(path, bytes)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))?;
-
-    Ok(())
+    write_json(path, manifest).await
 }

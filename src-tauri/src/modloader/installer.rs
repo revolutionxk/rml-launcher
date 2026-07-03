@@ -9,31 +9,33 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use futures_util::StreamExt;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter};
 use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 use tracing::{info, warn};
 
 use super::{
     api::{ensure_trusted_download, http_client, send_download_request},
     model::{ModLoaderInstallProgress, ModLoaderInstalled, ModLoaderPhase, ModLoaderRelease},
-    paths::release_cache_dir,
     storage::save_manifest,
 };
 
-const INSTALL_EVENT: &str = "modloader-install-progress";
+pub(super) const INSTALL_EVENT: &str = "modloader-install-progress";
 
-pub async fn install_release(
-    app: &AppHandle,
+pub trait InstallProgressSink {
+    fn report(&self, progress: ModLoaderInstallProgress);
+}
+
+pub async fn install_release<S: InstallProgressSink>(
+    sink: &S,
+    cache_dir: PathBuf,
     release: &ModLoaderRelease,
     version_guid: &str,
     install_dir: &Path,
 ) -> Result<ModLoaderInstalled> {
-    let reporter = ProgressReporter::new(app, version_guid, &release.tag, release.asset.size);
+    let reporter = ProgressReporter::new(sink, version_guid, &release.tag, release.asset.size);
 
     let result: Result<ModLoaderInstalled> = async {
         reporter.emit(ModLoaderPhase::Resolving, 0, None);
 
-        let cache_dir = release_cache_dir(app, &release.tag)?;
         tokio_fs::create_dir_all(&cache_dir)
             .await
             .with_context(|| format!("failed to create {}", cache_dir.display()))?;
@@ -99,10 +101,10 @@ pub async fn remove_from_install_dir(install_dir: &Path, artifacts: &[String]) -
     Ok(())
 }
 
-async fn download_bundle(
+async fn download_bundle<S: InstallProgressSink>(
     bundle_path: &Path,
     release: &ModLoaderRelease,
-    reporter: &ProgressReporter<'_>,
+    reporter: &ProgressReporter<'_, S>,
 ) -> Result<()> {
     if bundle_path.exists() && verify_bundle(bundle_path, release).await.is_ok() {
         info!(tag = %release.tag, "reusing verified cached mod loader bundle");
@@ -281,7 +283,7 @@ fn extract_bundle_blocking(bundle_path: &Path, install_dir: &Path) -> Result<()>
             .by_index(index)
             .with_context(|| format!("failed to read archive entry {index} from {}", bundle_path.display()))?;
         
-        let Some(enclosed) = entry.enclosed_name().map(PathBuf::from) else {
+        let Some(enclosed) = entry.enclosed_name() else {
             continue;
         };
         let destination = install_dir.join(&enclosed);
@@ -306,17 +308,17 @@ fn extract_bundle_blocking(bundle_path: &Path, install_dir: &Path) -> Result<()>
     Ok(())
 }
 
-struct ProgressReporter<'a> {
-    app: &'a AppHandle,
+struct ProgressReporter<'a, S: InstallProgressSink> {
+    sink: &'a S,
     version_guid: String,
     tag: String,
     total_bytes: u64,
 }
 
-impl<'a> ProgressReporter<'a> {
-    fn new(app: &'a AppHandle, version_guid: &str, tag: &str, total_bytes: u64) -> Self {
+impl<'a, S: InstallProgressSink> ProgressReporter<'a, S> {
+    fn new(sink: &'a S, version_guid: &str, tag: &str, total_bytes: u64) -> Self {
         Self {
-            app,
+            sink,
             version_guid: version_guid.to_string(),
             tag: tag.to_string(),
             total_bytes,
@@ -324,7 +326,7 @@ impl<'a> ProgressReporter<'a> {
     }
 
     fn emit(&self, phase: ModLoaderPhase, downloaded_bytes: u64, error: Option<String>) {
-        let payload = ModLoaderInstallProgress {
+        self.sink.report(ModLoaderInstallProgress {
             version_guid: self.version_guid.clone(),
             tag: self.tag.clone(),
             progress: compute_progress(&phase, downloaded_bytes, self.total_bytes),
@@ -332,9 +334,7 @@ impl<'a> ProgressReporter<'a> {
             downloaded_bytes,
             total_bytes: self.total_bytes,
             error,
-        };
-
-        let _ = self.app.emit(INSTALL_EVENT, payload);
+        });
     }
 }
 

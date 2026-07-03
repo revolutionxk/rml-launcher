@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
   Download,
   Flag,
   MoreHorizontal,
@@ -27,14 +30,17 @@ import { AutoSizer, List, type ListRowProps } from "react-virtualized";
 import { AddFlagPanel } from "@/components/add-flag-panel";
 import { FlagValueEditor } from "@/components/flag-value-editor";
 import Toggle from "@/components/toggle";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Menu } from "@/components/ui/menu";
+import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { SegmentGroup } from "@/components/ui/segment-group";
 import { TagEditor } from "@/components/ui/tag-editor";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useI18n } from "@/i18n";
 import {
   applyEngineStatePatch,
@@ -56,21 +62,43 @@ import {
 } from "@/lib/engine";
 import {
   getErrorMessage,
-  getSourceVariant,
   isDiffFlag,
   matchesFlagQuery,
   shouldPersistFlagValue,
   sortFlags,
 } from "@/lib/engine-utils";
-import { FLAG_TYPE_COLORS, FLAG_TYPE_LABELS, detectFlagType } from "@/lib/fast-flags";
+import {
+  FLAG_TYPE_COLORS,
+  FLAG_TYPE_LABELS,
+  type FlagType,
+  detectFlagType,
+} from "@/lib/fast-flags";
 import { cn } from "@/lib/utils";
+import { useSetupStore } from "@/stores/setup";
+
+type Translate = ReturnType<typeof useI18n>["t"];
 
 export const Route = createFileRoute("/settings/engine")({
-  component: EnginePage,
+  component: EngineRoute,
 });
 
-const FLAG_ROW_HEIGHT = 76;
+function EngineRoute() {
+  return <EngineFlags />;
+}
+
+interface EngineFlagsProps {
+  embeddedTargetVersionGuid?: string;
+}
+
+const FLAG_ROW_HEIGHT = 46;
 const FLAG_LIST_OVERSCAN = 8;
+
+const SOURCE_DOT: Record<EngineFlagSource, string> = {
+  binary: "bg-green",
+  lua: "bg-yellow",
+  custom: "bg-[#a78bfa]",
+  remote: "bg-accent",
+};
 
 const EMPTY_SCAN_INFO: EngineScanInfo = {
   canPatternScan: false,
@@ -85,7 +113,89 @@ const EMPTY_SCAN_INFO: EngineScanInfo = {
 type EngineFilterMode = "all" | "overrides" | "diff";
 type EngineView = "flags" | "config";
 
-function ListFlagPreview({ value, onEdit }: { value: string; onEdit: () => void }) {
+type SortColumn = "name" | "type" | "value";
+type SortDir = "asc" | "desc";
+type FlagSort = { column: SortColumn; dir: SortDir };
+
+const TYPE_ORDER: Record<FlagType, number> = { boolean: 0, integer: 1, string: 2, list: 3 };
+
+function compareFlags(a: EngineFlagRecord, b: EngineFlagRecord, sort: FlagSort): number {
+  let result: number;
+
+  if (sort.column === "type") {
+    const rankA = TYPE_ORDER[detectFlagType(a.name, a.value)];
+    const rankB = TYPE_ORDER[detectFlagType(b.name, b.value)];
+    result = rankA - rankB || a.name.localeCompare(b.name);
+  } else if (sort.column === "value") {
+    const numA = Number(a.value);
+    const numB = Number(b.value);
+    const numeric =
+      a.value.trim() !== "" &&
+      b.value.trim() !== "" &&
+      !Number.isNaN(numA) &&
+      !Number.isNaN(numB);
+    result = (numeric ? numA - numB : a.value.localeCompare(b.value)) || a.name.localeCompare(b.name);
+  } else {
+    result = a.name.localeCompare(b.name);
+  }
+
+  return sort.dir === "asc" ? result : -result;
+}
+
+function SortHeader({
+  label,
+  active,
+  dir,
+  onClick,
+  className,
+  align = "left",
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+  className?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        "group flex items-center gap-1 font-[inherit] text-[10px] font-semibold uppercase tracking-[0.06em]",
+        "cursor-pointer outline-none transition-colors",
+        active ? "text-text-muted" : "text-text-dim hover:text-text-muted",
+        align === "right" && "justify-end",
+        className,
+      )}
+    >
+      <span className="truncate">{label}</span>
+      {active ? (
+        dir === "asc" ? (
+          <ArrowUp size={11} className="shrink-0 text-accent" />
+        ) : (
+          <ArrowDown size={11} className="shrink-0 text-accent" />
+        )
+      ) : (
+        <ChevronsUpDown
+          size={11}
+          className="shrink-0 opacity-0 transition-opacity group-hover:opacity-60"
+        />
+      )}
+    </button>
+  );
+}
+
+function ListFlagPreview({
+  value,
+  emptyLabel,
+  onEdit,
+}: {
+  value: string;
+  emptyLabel: string;
+  onEdit: () => void;
+}) {
   const tags = value ? value.split(";").filter(Boolean) : [];
   const preview = tags.slice(0, 2);
   const extra = tags.length - 2;
@@ -97,7 +207,7 @@ function ListFlagPreview({ value, onEdit }: { value: string; onEdit: () => void 
       className="flex items-center gap-1 w-full min-h-8 bg-surface border border-border rounded-sm px-2 py-1.5 hover:border-border-focus transition-[border-color] duration-150 cursor-pointer overflow-hidden"
     >
       {tags.length === 0 ? (
-        <span className="text-[11px] text-text-dim">Empty — click to edit</span>
+        <span className="text-[11px] text-text-dim">{emptyLabel}</span>
       ) : (
         <>
           {preview.map((tag, i) => (
@@ -122,6 +232,7 @@ interface ListFlagEditorModalProps {
   onChange: (value: string) => void;
   onRemove: () => void;
   onClose: () => void;
+  t: Translate;
 }
 
 function ListFlagEditorModal({
@@ -131,6 +242,7 @@ function ListFlagEditorModal({
   onChange,
   onRemove,
   onClose,
+  t,
 }: ListFlagEditorModalProps) {
   const tags = flag.value ? flag.value.split(";").filter(Boolean) : [];
 
@@ -161,7 +273,7 @@ function ListFlagEditorModal({
               </div>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <span className="text-[11px] text-text-dim">
-                  {tags.length} item{tags.length !== 1 ? "s" : ""}
+                  {t("engine-list-items", { count: tags.length })}
                 </span>
                 <span className="text-[10px] text-text-dim">·</span>
                 <span className="text-[11px] text-text-dim">{sourceLabel}</span>
@@ -181,10 +293,10 @@ function ListFlagEditorModal({
                   <Button.Icon>
                     <Trash2 size={11} />
                   </Button.Icon>
-                  <Button.Label>Reset</Button.Label>
+                  <Button.Label>{t("engine-list-reset")}</Button.Label>
                 </Button.Root>
               )}
-              <Button.Root variant="ghost" size="icon" onClick={onClose}>
+              <Button.Root variant="ghost" size="icon" aria-label={t("common-dismiss")} onClick={onClose}>
                 <Button.Icon>
                   <X size={13} />
                 </Button.Icon>
@@ -192,12 +304,16 @@ function ListFlagEditorModal({
             </div>
           </div>
 
-          <TagEditor value={flag.value} onChange={onChange} />
+          <TagEditor
+            value={flag.value}
+            onChange={onChange}
+            placeholder={t("engine-tag-placeholder")}
+          />
 
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-[11px] text-text-dim">Press Enter or ; to add values</span>
+            <span className="text-[11px] text-text-dim">{t("engine-list-hint")}</span>
             <Button.Root variant="primary" size="sm" onClick={onClose}>
-              <Button.Label>Done</Button.Label>
+              <Button.Label>{t("engine-list-done")}</Button.Label>
             </Button.Root>
           </div>
         </motion.div>
@@ -207,8 +323,11 @@ function ListFlagEditorModal({
   );
 }
 
-function EnginePage() {
+export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
   const { t } = useI18n();
+  const embedded = embeddedTargetVersionGuid != null;
+  const flagsIntroDismissed = useSetupStore((s) => s.flagsIntroDismissed);
+  const dismissFlagsIntro = useSetupStore((s) => s.dismissFlagsIntro);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<List | null>(null);
   const [flags, setFlags] = useState<EngineFlagRecord[]>([]);
@@ -230,6 +349,15 @@ function EnginePage() {
   const [pendingFlags, setPendingFlags] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editingListFlagName, setEditingListFlagName] = useState<string | null>(null);
+  const [sort, setSort] = useState<FlagSort | null>(null);
+
+  const toggleSort = (column: SortColumn) => {
+    setSort((current) => {
+      if (!current || current.column !== column) return { column, dir: "asc" };
+      if (current.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
+  };
 
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const hasSearchQuery = deferredSearch.length > 0;
@@ -246,8 +374,12 @@ function EnginePage() {
 
     return !hasSearchQuery || matchesFlagQuery(flag, deferredSearch);
   });
+
+  const visibleFlags = sort
+    ? [...filteredFlags].sort((a, b) => compareFlags(a, b, sort))
+    : filteredFlags;
   const existingNames = new Set(flags.map((flag) => flag.name));
-  const listKey = `${filterMode}:${deferredSearch}:${filteredFlags.length}:${overrideCount}:${diffCount}`;
+  const listKey = `${filterMode}:${deferredSearch}:${filteredFlags.length}:${overrideCount}:${diffCount}:${sort?.column ?? ""}:${sort?.dir ?? ""}`;
   const isBusy =
     isLoading ||
     isRescanning ||
@@ -258,11 +390,13 @@ function EnginePage() {
   const editingListFlag = editingListFlagName
     ? (flags.find((f) => f.name === editingListFlagName) ?? null)
     : null;
+    
+  const effectiveView: EngineView = embedded ? "flags" : view;
 
   useEffect(() => {
     listRef.current?.recomputeRowHeights();
     listRef.current?.forceUpdateGrid();
-  }, [flags, filterMode, deferredSearch]);
+  }, [flags, filterMode, deferredSearch, sort]);
 
   const applyEngineState = (state: EngineState) => {
     startTransition(() => {
@@ -296,9 +430,26 @@ function EnginePage() {
     }
   };
 
+  const loadEmbeddedTarget = async (guid: string) => {
+    setIsLoading(true);
+    try {
+      const nextState = await setEngineTargetVersion(guid);
+      applyEngineState(nextState);
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, t("engine-error-load")));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    void loadState({ showLoading: true });
-  }, []);
+    if (embeddedTargetVersionGuid) {
+      void loadEmbeddedTarget(embeddedTargetVersionGuid);
+    } else {
+      void loadState({ showLoading: true });
+    }
+  }, [embeddedTargetVersionGuid]);
 
   const handleTargetChange = async (versionGuid: string | null) => {
     const nextTargetVersionGuid = versionGuid === "__auto__" ? null : versionGuid;
@@ -587,7 +738,7 @@ function EnginePage() {
   const getFlagRowHeight = () => FLAG_ROW_HEIGHT;
 
   const renderFlagRow = ({ index, key, style }: ListRowProps) => {
-    const flag = filteredFlags[index];
+    const flag = visibleFlags[index];
 
     if (!flag) {
       return null;
@@ -595,15 +746,14 @@ function EnginePage() {
 
     const type = detectFlagType(flag.name, flag.value);
     const isList = type === "list";
-    const isBoolean = type === "boolean";
     const isSavingFlag = pendingFlags.has(flag.name);
     const rowStyle: CSSProperties = {
       ...style,
       boxSizing: "border-box",
-      padding: "3px 6px",
+      padding: "2px 4px",
       width: "100%",
     };
-    const metadata = flag.isOverridden
+    const detail = flag.isOverridden
       ? t("engine-default-override-value", {
           default: formatPreviewValue(flag.defaultValue),
           override: formatPreviewValue(flag.value),
@@ -616,48 +766,68 @@ function EnginePage() {
       <div key={key} style={rowStyle}>
         <div
           className={cn(
-            "relative flex h-full items-center gap-3 overflow-hidden rounded-sm border bg-card py-2.5 pl-4 pr-2",
+            "group relative flex h-full items-center gap-2.5 overflow-hidden rounded-sm border pl-3.5 pr-1.5",
             "transition-[border-color,background] duration-150",
             flag.isOverridden
-              ? "border-accent/30 bg-accent-muted/6"
-              : "border-border hover:border-[#2e2e2e] hover:bg-card-hover",
+              ? "border-accent/25 bg-accent-muted/5"
+              : "border-transparent hover:border-border hover:bg-card-hover",
           )}
         >
           {flag.isOverridden && (
-            <span className="absolute inset-y-2 left-0 w-[2.5px] rounded-full bg-accent" />
+            <span className="absolute inset-y-1.5 left-0 w-[2.5px] rounded-full bg-accent" />
           )}
 
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate font-code text-[12px] font-medium text-accent">
-                {flag.name}
-              </span>
-              <span
-                className={cn(
-                  "shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                  FLAG_TYPE_COLORS[type],
-                )}
-              >
-                {FLAG_TYPE_LABELS[type]}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-              <Badge.Root variant={getSourceVariant(flag.source)} className="shrink-0">
-                <Badge.Label>{sourceLabel(flag.source)}</Badge.Label>
-              </Badge.Root>
-              <span className="truncate text-[11px] text-text-dim">{metadata}</span>
-            </div>
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              render={
+                <div className="flex min-w-0 flex-1 cursor-default items-center gap-2 overflow-hidden">
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      flag.isOverridden ? "bg-accent" : SOURCE_DOT[flag.source],
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "truncate font-code text-[12px]",
+                      flag.isOverridden ? "font-medium text-accent" : "text-text",
+                    )}
+                  >
+                    {flag.name}
+                  </span>
+                </div>
+              }
+            />
+            <Tooltip.Portal>
+              <Tooltip.Positioner>
+                <Tooltip.Popup className="max-w-72 leading-normal">
+                  <div className="font-code text-[11px] text-text">{flag.name}</div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-text-muted">{sourceLabel(flag.source)}</span>
+                    <span className="text-text-dim">·</span>
+                    <span className="text-text-muted">{detail}</span>
+                  </div>
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+
+          <div className="w-14 shrink-0">
+            <span
+              className={cn(
+                "inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                FLAG_TYPE_COLORS[type],
+              )}
+            >
+              {FLAG_TYPE_LABELS[type]}
+            </span>
           </div>
 
-          <div
-            className={cn(
-              "flex shrink-0 items-center",
-              isList ? "w-44" : isBoolean ? "w-12 justify-end" : "w-36 justify-end",
-            )}
-          >
+          <div className="flex w-44 shrink-0 items-center justify-end">
             {isList ? (
               <ListFlagPreview
                 value={flag.value}
+                emptyLabel={t("engine-list-empty")}
                 onEdit={() => setEditingListFlagName(flag.name)}
               />
             ) : (
@@ -673,8 +843,8 @@ function EnginePage() {
             {flag.isOverridden && (
               <Button.Root
                 variant="danger"
-                size="icon"
-                aria-label={t("engine-remove-flag")}
+                size="icon-sm"
+                aria-label={t("engine-reset-flag")}
                 disabled={isSavingFlag}
                 onClick={() => {
                   void removeFlag(flag);
@@ -707,22 +877,46 @@ function EnginePage() {
         }}
       />
 
-      <div className="flex shrink-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[18px] font-semibold leading-tight tracking-[-0.018em] text-text">
-            {t("engine-title")}
-          </h1>
-          <p className="mt-0.5 text-[12.5px] leading-normal text-text-muted">
-            {scanInfo.targetVersion
-              ? t("engine-scan-target", { version: scanInfo.targetVersion })
-              : t("engine-description")}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1">
-          <span className={cn("h-1.5 w-1.5 rounded-full", scanDotClass)} />
-          <span className="text-[11px] font-medium text-text-muted">{scanStatusLabel}</span>
-        </div>
-      </div>
+      {!embedded && (
+        <>
+      <PageHeader
+        className="shrink-0"
+        title={t("engine-title")}
+        description={
+          <>
+            {t("engine-description")}
+            {scanInfo.targetVersion && (
+              <span className="text-text-dim">
+                {" · "}
+                {t("engine-scan-target", { version: scanInfo.targetVersion })}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <Tooltip.Provider>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                render={
+                  <div className="flex cursor-default items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", scanDotClass)} />
+                    <span className="text-[11px] font-medium text-text-muted">
+                      {scanStatusLabel}
+                    </span>
+                  </div>
+                }
+              />
+              <Tooltip.Portal>
+                <Tooltip.Positioner>
+                  <Tooltip.Popup className="max-w-60 leading-normal">
+                    {t("engine-scan-help")}
+                  </Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+        }
+      />
 
       <SegmentGroup.Root
         value={view}
@@ -738,6 +932,8 @@ function EnginePage() {
           {t("engine-tab-config")}
         </SegmentGroup.Item>
       </SegmentGroup.Root>
+        </>
+      )}
 
       <AnimatePresence initial={false}>
         {errorMessage && (
@@ -749,14 +945,12 @@ function EnginePage() {
             transition={{ duration: 0.15 }}
             className="shrink-0 overflow-hidden"
           >
-            <div className="rounded-sm border border-red/30 bg-red/10 px-4 py-2.5 text-[12px] text-red">
-              {errorMessage}
-            </div>
+            <Callout variant="danger">{errorMessage}</Callout>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {view === "config" && (
+      {effectiveView === "config" && (
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -866,85 +1060,121 @@ function EnginePage() {
         </motion.div>
       )}
 
-      {view === "flags" && (
+      {effectiveView === "flags" && (
         <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-          {scanInfo.warning && (
-            <div className="shrink-0 rounded-sm border border-yellow/25 bg-yellow/10 px-4 py-2.5 text-[12px] text-yellow">
-              {t("engine-scan-warning", { message: scanInfo.warning })}
-            </div>
-          )}
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm icon-box--blue">
-              <Flag size={12} />
-            </span>
-            <span className="text-[12.5px] font-semibold text-text">{t("engine-fast-flags")}</span>
-            <span className="text-[11.5px] text-text-dim tabular-nums">{countLabel}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button.Root
-              variant={showAddPanel ? "ghost" : "primary"}
-              size="sm"
-              onClick={() => setShowAddPanel((v) => !v)}
+          {!flagsIntroDismissed && (
+            <Callout
+              variant="info"
+              className="shrink-0"
+              title={t("engine-flags-intro-title")}
+              onDismiss={dismissFlagsIntro}
+              dismissLabel={t("common-dismiss")}
             >
-              <Button.Icon>
-                <Plus
-                  size={12}
-                  className={cn("transition-transform duration-200", showAddPanel && "rotate-45")}
-                />
-              </Button.Icon>
-              <Button.Label>{t("engine-add-flag")}</Button.Label>
-            </Button.Root>
-            <Menu.Root>
-              <Menu.Trigger
-                render={
-                  <Button.Root variant="ghost" size="icon" aria-label={t("engine-fast-flags")}>
-                    <Button.Icon>
-                      <MoreHorizontal size={14} />
-                    </Button.Icon>
-                  </Button.Root>
-                }
+              {t("engine-flags-intro")}
+            </Callout>
+          )}
+          {scanInfo.warning && (
+            <Callout variant="warning" className="shrink-0">
+              {t("engine-scan-warning", { message: scanInfo.warning })}
+            </Callout>
+          )}
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Input.Root className="min-w-40 flex-1">
+            <Input.Icon>
+              <Search size={13} />
+            </Input.Icon>
+            <Input.Field
+              hasLeadingIcon
+              placeholder={t("engine-search-placeholder")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </Input.Root>
+          <SegmentGroup.Root
+            value={filterMode}
+            onValueChange={(value) => setFilterMode(value as EngineFilterMode)}
+            className="grid w-full shrink-0 grid-cols-3 sm:w-66"
+          >
+            <SegmentGroup.Item value="all">{t("engine-filter-all")}</SegmentGroup.Item>
+            <SegmentGroup.Item value="overrides">
+              {t("engine-filter-overrides")}
+              {overrideCount > 0 && (
+                <span className="ml-1 rounded-full bg-current/15 px-1.5 text-[10px] font-semibold tabular-nums">
+                  {overrideCount}
+                </span>
+              )}
+            </SegmentGroup.Item>
+            <SegmentGroup.Item value="diff">
+              {t("engine-filter-diff")}
+              {diffCount > 0 && (
+                <span className="ml-1 rounded-full bg-current/15 px-1.5 text-[10px] font-semibold tabular-nums">
+                  {diffCount}
+                </span>
+              )}
+            </SegmentGroup.Item>
+          </SegmentGroup.Root>
+          <Button.Root
+            variant={showAddPanel ? "ghost" : "primary"}
+            onClick={() => setShowAddPanel((v) => !v)}
+          >
+            <Button.Icon>
+              <Plus
+                size={13}
+                className={cn("transition-transform duration-200", showAddPanel && "rotate-45")}
               />
-              <Menu.Portal>
-                <Menu.Positioner>
-                  <Menu.Popup>
-                    <Menu.Item
-                      disabled={!scanInfo.canPatternScan || isBusy}
-                      onClick={() => void loadState({ forceRescan: true })}
-                    >
-                      <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
-                        <RefreshCw size={13} className={cn(isRescanning && "animate-spin")} />
-                      </span>
-                      <span>{t("engine-rescan")}</span>
-                    </Menu.Item>
-                    <Menu.Item disabled={isBusy} onClick={() => importInputRef.current?.click()}>
-                      <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
-                        <Upload size={13} />
-                      </span>
-                      <span>{t("engine-import")}</span>
-                    </Menu.Item>
-                    <Menu.Item disabled={overrideCount === 0 || isBusy} onClick={exportSnapshot}>
-                      <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
-                        <Download size={13} />
-                      </span>
-                      <span>{t("engine-export")}</span>
-                    </Menu.Item>
-                    <div className="my-1 h-px bg-border-subtle" />
-                    <Menu.Item
-                      disabled={overrideCount === 0 || isClearingOverrides}
-                      className="text-red data-[highlighted]:text-red"
-                      onClick={() => void clearOverrides()}
-                    >
-                      <span className="flex h-[13px] w-[13px] items-center justify-center text-red/85">
-                        <Trash2 size={13} />
-                      </span>
-                      <span>{t("engine-clear-overrides")}</span>
-                    </Menu.Item>
-                  </Menu.Popup>
-                </Menu.Positioner>
-              </Menu.Portal>
-            </Menu.Root>
-          </div>
+            </Button.Icon>
+            <Button.Label>{t("engine-add-flag")}</Button.Label>
+          </Button.Root>
+          <Menu.Root>
+            <Menu.Trigger
+              render={
+                <Button.Root variant="ghost" size="icon" aria-label={t("engine-fast-flags")}>
+                  <Button.Icon>
+                    <MoreHorizontal size={14} />
+                  </Button.Icon>
+                </Button.Root>
+              }
+            />
+            <Menu.Portal>
+              <Menu.Positioner>
+                <Menu.Popup>
+                  <Menu.Item
+                    disabled={!scanInfo.canPatternScan || isBusy}
+                    onClick={() => void loadState({ forceRescan: true })}
+                  >
+                    <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
+                      <RefreshCw size={13} className={cn(isRescanning && "animate-spin")} />
+                    </span>
+                    <span>{t("engine-rescan")}</span>
+                  </Menu.Item>
+                  <Menu.Item disabled={isBusy} onClick={() => importInputRef.current?.click()}>
+                    <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
+                      <Upload size={13} />
+                    </span>
+                    <span>{t("engine-import")}</span>
+                  </Menu.Item>
+                  <Menu.Item disabled={overrideCount === 0 || isBusy} onClick={exportSnapshot}>
+                    <span className="flex h-[13px] w-[13px] items-center justify-center text-text-dim">
+                      <Download size={13} />
+                    </span>
+                    <span>{t("engine-export")}</span>
+                  </Menu.Item>
+                  <div className="my-1 h-px bg-border-subtle" />
+                  <Menu.Item
+                    disabled={overrideCount === 0 || isClearingOverrides}
+                    className="text-red data-[highlighted]:text-red"
+                    onClick={() => void clearOverrides()}
+                  >
+                    <span className="flex h-[13px] w-[13px] items-center justify-center text-red/85">
+                      <Trash2 size={13} />
+                    </span>
+                    <span>{t("engine-clear-overrides")}</span>
+                  </Menu.Item>
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
         </div>
 
         <AnimatePresence initial={false}>
@@ -966,88 +1196,81 @@ function EnginePage() {
           )}
         </AnimatePresence>
 
-        <div className="shrink-0 flex items-center gap-2">
-          <SegmentGroup.Root
-            value={filterMode}
-            onValueChange={(value) => setFilterMode(value as EngineFilterMode)}
-            className="grid grid-cols-3 flex-1"
-          >
-            <SegmentGroup.Item value="all">{t("engine-filter-all")}</SegmentGroup.Item>
-            <SegmentGroup.Item value="overrides">
-              {t("engine-filter-overrides")}
-              {overrideCount > 0 && (
-                <span className="ml-1 rounded-full bg-current/15 px-1.5 text-[10px] font-semibold tabular-nums">
-                  {overrideCount}
-                </span>
-              )}
-            </SegmentGroup.Item>
-            <SegmentGroup.Item value="diff">
-              {t("engine-filter-diff")}
-              {diffCount > 0 && (
-                <span className="ml-1 rounded-full bg-current/15 px-1.5 text-[10px] font-semibold tabular-nums">
-                  {diffCount}
-                </span>
-              )}
-            </SegmentGroup.Item>
-          </SegmentGroup.Root>
-          <Input.Root className="w-52 shrink-0">
-            <Input.Icon>
-              <Search size={13} />
-            </Input.Icon>
-            <Input.Field
-              hasLeadingIcon
-              placeholder={t("engine-search-placeholder")}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-border bg-card/40">
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-border-subtle bg-surface/40 py-2 pl-4.5 pr-2.75 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-dim">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="w-1.5 shrink-0" />
+              <SortHeader
+                label={t("engine-col-name")}
+                active={sort?.column === "name"}
+                dir={sort?.dir ?? "asc"}
+                onClick={() => toggleSort("name")}
+              />
+              <span className="font-normal normal-case tracking-normal text-text-dim tabular-nums">
+                · {countLabel}
+              </span>
+            </div>
+            <SortHeader
+              className="w-14 shrink-0"
+              label={t("engine-col-type")}
+              active={sort?.column === "type"}
+              dir={sort?.dir ?? "asc"}
+              onClick={() => toggleSort("type")}
             />
-          </Input.Root>
-        </div>
-
-        {isLoading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border bg-card/40 text-[12.5px] text-text-muted">
-            <span className="flex items-center gap-2">
-              <RefreshCw size={13} className="animate-spin" />
-              {t("engine-loading")}
-            </span>
+            <SortHeader
+              className="w-44 shrink-0"
+              align="right"
+              label={t("engine-col-value")}
+              active={sort?.column === "value"}
+              dir={sort?.dir ?? "asc"}
+              onClick={() => toggleSort("value")}
+            />
+            <span className="w-7 shrink-0" />
           </div>
-        ) : filteredFlags.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border bg-card/40 px-6 py-10">
-            <div className="flex max-w-xs flex-col items-center gap-2.5 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-sm icon-box--blue">
-                <Flag size={22} />
-              </div>
-              <div className="text-[13px] font-medium text-text-muted">{t("engine-empty-title")}</div>
-              <div className="text-[12px] leading-relaxed text-text-dim">{emptyStateMessage}</div>
-            </div>
-          </div>
-        ) : null}
 
-        {!isLoading && filteredFlags.length > 0 && (
           <div className="min-h-0 flex-1">
-            <div className="h-full overflow-hidden rounded-sm border border-border bg-card/40">
-              <AutoSizer>
-                {({ height, width }) => {
-                  if (height <= 0 || width <= 0) return null;
-                  return (
-                    <List
-                      ref={(instance) => {
-                        listRef.current = instance;
-                      }}
-                      key={listKey}
-                      width={width}
-                      height={height}
-                      rowCount={filteredFlags.length}
-                      rowHeight={getFlagRowHeight}
-                      rowRenderer={renderFlagRow}
-                      overscanRowCount={FLAG_LIST_OVERSCAN}
-                      style={{ outline: "none", overflowX: "hidden" }}
-                    />
-                  );
-                }}
-              </AutoSizer>
-            </div>
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center text-[12.5px] text-text-muted">
+                <span className="flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" />
+                  {t("engine-loading")}
+                </span>
+              </div>
+            ) : visibleFlags.length === 0 ? (
+              <div className="flex h-full items-center justify-center px-6 py-10">
+                <EmptyState
+                  className="border-transparent bg-transparent p-0 shadow-none"
+                  icon={<Flag size={22} />}
+                  title={t("engine-empty-title")}
+                  description={emptyStateMessage}
+                />
+              </div>
+            ) : (
+              <Tooltip.Provider delay={350}>
+                <AutoSizer>
+                  {({ height, width }) => {
+                    if (height <= 0 || width <= 0) return null;
+                    return (
+                      <List
+                        ref={(instance) => {
+                          listRef.current = instance;
+                        }}
+                        key={listKey}
+                        width={width}
+                        height={height}
+                        rowCount={visibleFlags.length}
+                        rowHeight={getFlagRowHeight}
+                        rowRenderer={renderFlagRow}
+                        overscanRowCount={FLAG_LIST_OVERSCAN}
+                        style={{ outline: "none", overflowX: "hidden" }}
+                      />
+                    );
+                  }}
+                </AutoSizer>
+              </Tooltip.Provider>
+            )}
           </div>
-        )}
+        </div>
         </div>
       )}
 
@@ -1061,6 +1284,7 @@ function EnginePage() {
             void removeFlag(editingListFlag);
           }}
           onClose={() => setEditingListFlagName(null)}
+          t={t}
         />
       )}
     </div>

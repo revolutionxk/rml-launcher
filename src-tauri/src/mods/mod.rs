@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use tauri::AppHandle;
 use tracing::info;
 
-use crate::studio::installed_studio_target;
+use crate::{studio::installed_studio_target, AppError, CommandResult};
 
 pub use self::model::{ModEntry, ModsResponse};
 
@@ -30,13 +30,10 @@ fn disabled_dir(install_dir: &Path) -> PathBuf {
 }
 
 #[tauri::command]
-pub async fn list_mods(app: AppHandle, version_guid: String) -> Result<ModsResponse, String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
+pub async fn list_mods(app: AppHandle, version_guid: String) -> CommandResult<ModsResponse> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
 
-    tokio::task::spawn_blocking(move || list_mods_blocking(&install_dir))
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(tokio::task::spawn_blocking(move || list_mods_blocking(&install_dir)).await??)
 }
 
 pub(crate) fn count_mods(install_dir: &Path) -> (usize, usize) {
@@ -56,25 +53,22 @@ pub async fn set_mod_enabled(
     version_guid: String,
     mod_id: String,
     enabled: bool,
-) -> Result<(), String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
-    let mod_id = sanitize_mod_id(&mod_id).map_err(|error| error.to_string())?;
+) -> CommandResult<()> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
+    let mod_id = sanitize_mod_id(&mod_id)?;
 
-    tokio::task::spawn_blocking(move || set_mod_enabled_blocking(&install_dir, &mod_id, enabled))
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(
+        tokio::task::spawn_blocking(move || set_mod_enabled_blocking(&install_dir, &mod_id, enabled))
+            .await??,
+    )
 }
 
 #[tauri::command]
-pub async fn remove_mod(app: AppHandle, version_guid: String, mod_id: String) -> Result<(), String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
-    let mod_id = sanitize_mod_id(&mod_id).map_err(|error| error.to_string())?;
+pub async fn remove_mod(app: AppHandle, version_guid: String, mod_id: String) -> CommandResult<()> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
+    let mod_id = sanitize_mod_id(&mod_id)?;
 
-    tokio::task::spawn_blocking(move || remove_mod_blocking(&install_dir, &mod_id))
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(tokio::task::spawn_blocking(move || remove_mod_blocking(&install_dir, &mod_id)).await??)
 }
 
 #[tauri::command]
@@ -82,29 +76,29 @@ pub async fn import_mod(
     app: AppHandle,
     version_guid: String,
     source_path: String,
-) -> Result<ModEntry, String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
+) -> CommandResult<ModEntry> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
 
-    tokio::task::spawn_blocking(move || import_mod_blocking(&install_dir, Path::new(&source_path)))
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())
+    Ok(
+        tokio::task::spawn_blocking(move || import_mod_blocking(&install_dir, Path::new(&source_path)))
+            .await??,
+    )
 }
 
 #[tauri::command]
-pub async fn open_mods_dir(app: AppHandle, version_guid: String) -> Result<(), String> {
-    let install_dir = installed_studio_target(&app, &version_guid).map_err(|error| error.to_string())?;
+pub async fn open_mods_dir(app: AppHandle, version_guid: String) -> CommandResult<()> {
+    let install_dir = installed_studio_target(&app, &version_guid)?;
     let dir = mods_dir(&install_dir);
 
     if !loader_installed(&install_dir) {
-        return Err("Install the mod loader for this version first.".to_string());
+        return Err(AppError::Failed(
+            "Install the mod loader for this version first.".into(),
+        ));
     }
 
-    fs::create_dir_all(&dir)
-        .with_context(|| format!("failed to create {}", dir.display()))
-        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&dir).with_context(|| format!("failed to create {}", dir.display()))?;
 
-    crate::platform::reveal_path(&dir).map_err(|error| error.to_string())
+    Ok(crate::platform::reveal_path(&dir)?)
 }
 
 fn list_mods_blocking(install_dir: &Path) -> Result<ModsResponse> {
@@ -114,7 +108,7 @@ fn list_mods_blocking(install_dir: &Path) -> Result<ModsResponse> {
     collect_mods(&mods_dir(install_dir), true, &mut mods)?;
     collect_mods(&disabled_dir(install_dir), false, &mut mods)?;
 
-    mods.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    mods.sort_by_key(|entry| entry.name.to_lowercase());
 
     Ok(ModsResponse {
         loader_installed,
@@ -321,7 +315,7 @@ fn import_zip(source: &Path, mods_dir: &Path) -> Result<String> {
             .by_index(index)
             .with_context(|| format!("failed to read archive entry {index} from {}", source.display()))?;
 
-        let Some(enclosed) = entry.enclosed_name().map(PathBuf::from) else {
+        let Some(enclosed) = entry.enclosed_name() else {
             continue;
         };
 

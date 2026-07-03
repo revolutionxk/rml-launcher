@@ -1,16 +1,19 @@
 use std::fs;
 
 use anyhow::{Context, Result};
-use tauri::AppHandle;
-use tokio::fs as tokio_fs;
+
+use crate::{
+    store::{read_json, write_json},
+    Paths,
+};
 
 use super::{
     model::{EnginePreferences, EngineScanCache, EngineVersionPreferences},
     paths::{preferences_path, scan_cache_path},
 };
 
-pub fn load_preferences(app: &AppHandle) -> Result<EnginePreferences> {
-    let path = preferences_path(app)?;
+pub fn load_preferences(paths: &Paths) -> Result<EnginePreferences> {
+    let path = preferences_path(paths);
 
     if !path.exists() {
         return Ok(EnginePreferences::default());
@@ -40,53 +43,14 @@ pub fn load_preferences(app: &AppHandle) -> Result<EnginePreferences> {
     Ok(preferences)
 }
 
-pub async fn save_preferences(app: &AppHandle, preferences: &EnginePreferences) -> Result<()> {
-    let path = preferences_path(app)?;
-
-    if let Some(parent) = path.parent() {
-        tokio_fs::create_dir_all(parent)
-            .await
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(preferences)
-        .context("failed to serialize engine settings")?;
-
-    tokio_fs::write(&path, bytes)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))?;
-
-    Ok(())
+pub async fn save_preferences(paths: &Paths, preferences: &EnginePreferences) -> Result<()> {
+    write_json(&preferences_path(paths), preferences).await
 }
 
-pub fn load_scan_cache(app: &AppHandle, version_guid: &str) -> Result<Option<EngineScanCache>> {
-    let path = scan_cache_path(app, version_guid)?;
-
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let bytes = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let cache = serde_json::from_slice(&bytes)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-
-    Ok(Some(cache))
+pub fn load_scan_cache(paths: &Paths, version_guid: &str) -> Result<Option<EngineScanCache>> {
+    read_json(&scan_cache_path(paths, version_guid))
 }
 
-pub async fn save_scan_cache(app: &AppHandle, cache: &EngineScanCache) -> Result<()> {
-    let path = scan_cache_path(app, &cache.version_guid)?;
-
-    if let Some(parent) = path.parent() {
-        tokio_fs::create_dir_all(parent)
-            .await
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(cache).context("failed to serialize scan cache")?;
-
-    tokio_fs::write(&path, bytes)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))?;
-
-    Ok(())
+pub async fn save_scan_cache(paths: &Paths, cache: &EngineScanCache) -> Result<()> {
+    write_json(&scan_cache_path(paths, &cache.version_guid), cache).await
 }

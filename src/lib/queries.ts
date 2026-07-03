@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { getEngineState } from "@/lib/engine";
 import { listInstances } from "@/lib/instances";
 import { getModLoaderStatus, listModLoaderReleases } from "@/lib/modloader";
 import { listMods } from "@/lib/mods";
 import { getHostInfo, getVinegarStatus } from "@/lib/platform";
+import { getStudioProtocolStatus } from "@/lib/protocol";
 import { listStudioVersions } from "@/lib/studio";
 
 export const queryKeys = {
@@ -14,7 +16,29 @@ export const queryKeys = {
   modloaderReleases: ["modloader-releases"] as const,
   modloaderStatus: (versionGuid: string) => ["modloader-status", versionGuid] as const,
   mods: (versionGuid: string) => ["mods", versionGuid] as const,
+  engineGeneralSettings: ["engine-general-settings"] as const,
+  studioProtocol: ["studio-protocol"] as const,
 };
+
+export function useStudioProtocolStatus() {
+  return useQuery({
+    queryKey: queryKeys.studioProtocol,
+    queryFn: getStudioProtocolStatus,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useEngineGeneralSettings() {
+  return useQuery({
+    queryKey: queryKeys.engineGeneralSettings,
+    queryFn: getEngineState,
+    staleTime: 5 * 60 * 1000,
+    select: (state) => ({
+      enableTracking: state.enableTracking,
+      disableTelemetry: state.disableTelemetry,
+    }),
+  });
+}
 
 export function useHostInfo() {
   return useQuery({

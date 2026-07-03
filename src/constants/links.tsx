@@ -1,6 +1,6 @@
 import { BookOpen, Bug, GitBranch, Heart } from "lucide-react";
 
-export const RML_DISCORD_URL = "https://discord.gg/revolutionxk";
+export const RML_DISCORD_URL = "https://robloxmodloader.com";
 export const RML_SPONSOR_URL = "https://github.com/sponsors/revolutionxk";
 
 export const RML_GITHUB_URL = "https://github.com/revolutionxk/roblox-modloader";
@@ -32,4 +32,4 @@ export const LINKS = [
     descriptionId: "about-link-sponsor-description",
     href: RML_SPONSOR_URL,
   },
-];
+] as const;

@@ -38,7 +38,7 @@ function CardHeader({ children, className, border = true }: CardHeaderProps) {
   return (
     <div
       className={cn(
-        "px-4.5 pt-3.5 pb-3",
+        "card-header px-4.5 pt-3.5 pb-3",
         border && "border-b border-border-subtle",
         className,
       )}
@@ -73,7 +73,7 @@ function CardDescription({ children, className }: { children: ReactNode; classNa
 CardDescription.displayName = "Card.Description";
 
 function CardBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("p-[14px_18px]", className)}>{children}</div>;
+  return <div className={cn("card-body p-[14px_18px]", className)}>{children}</div>;
 }
 CardBody.displayName = "Card.Body";
 

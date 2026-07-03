@@ -41,6 +41,15 @@ function applyToDOM(resolved: ResolvedTheme, accent: AccentColor) {
   setTimeout(() => root.removeAttribute("data-theme-transitioning"), 280);
 }
 
+function applyCompactToDOM(compact: boolean) {
+  const root = document.documentElement;
+  if (compact) {
+    root.setAttribute("data-compact", "");
+  } else {
+    root.removeAttribute("data-compact");
+  }
+}
+
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set, get) => ({
@@ -55,9 +64,10 @@ export const useThemeStore = create<ThemeStore>()(
       },
 
       apply: () => {
-        const { resolvedTheme, accent } = get();
+        const { resolvedTheme, accent, compactMode } = get();
         const color = ACCENT_COLORS.find((c) => c.value === accent) ?? ACCENT_COLORS[0];
         applyToDOM(resolvedTheme(), color);
+        applyCompactToDOM(compactMode);
       },
 
       setTheme: (theme) => {
@@ -74,7 +84,10 @@ export const useThemeStore = create<ThemeStore>()(
         applyToDOM(resolvedTheme(), color);
       },
 
-      setCompactMode: (compactMode) => set({ compactMode }),
+      setCompactMode: (compactMode) => {
+        set({ compactMode });
+        applyCompactToDOM(compactMode);
+      },
       setShowVersionBadge: (showVersionBadge) => set({ showVersionBadge }),
     }),
     {

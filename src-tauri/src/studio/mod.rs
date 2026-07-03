@@ -9,17 +9,22 @@ mod storage;
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{Context, Result};
-use tauri::{AppHandle, State};
+use anyhow::{bail, Context, Result};
+use tauri::{AppHandle, Emitter, State};
 use tokio::{fs as tokio_fs, sync::Mutex};
 use tracing::{info, warn};
 
+use crate::{AppError, CommandResult, Paths};
+
 use self::{
-    config::CURRENT_CHANNEL,
+    config::{CURRENT_CHANNEL, STUDIO_INSTALL_EVENT},
     engine::apply_saved_preferences_to_install_dir,
-    installer::{install_version, revalidate_version},
-    model::{StudioBuild, StudioVersionsResponse},
-    paths::{version_download_dir, version_executable_path, version_install_dir, version_manifest_path},
+    installer::{install_version, revalidate_version, StudioProgressSink},
+    model::{StudioBuild, StudioInstallProgress, StudioVersionsResponse},
+    paths::{
+        downloads_dir, version_download_dir, version_executable_path, version_install_dir,
+        version_launcher_path, version_manifest_path,
+    },
     storage::{
         discover_installed_versions, load_studio_preferences, read_installed_manifest,
         save_studio_preferences,
@@ -33,9 +38,20 @@ pub struct StudioState {
     install_lock: Mutex<()>,
 }
 
+struct EventSink<'a> {
+    app: &'a AppHandle,
+}
+
+impl StudioProgressSink for EventSink<'_> {
+    fn report(&self, progress: StudioInstallProgress) {
+        let _ = self.app.emit(STUDIO_INSTALL_EVENT, progress);
+    }
+}
+
 pub(crate) fn installed_instances(app: &AppHandle) -> Result<Vec<StudioVersionEntry>> {
-    let mut versions = discover_installed_versions(app)?;
-    let preferences = load_studio_preferences(app).unwrap_or_default();
+    let paths = Paths::resolve(app)?;
+    let mut versions = discover_installed_versions(&paths)?;
+    let preferences = load_studio_preferences(&paths).unwrap_or_default();
 
     if let Some(default_version_guid) = preferences.default_version_guid.as_deref() {
         for version in versions.iter_mut() {
@@ -61,7 +77,8 @@ pub(crate) fn installed_studio_target(app: &AppHandle, version_guid: &str) -> Re
         return crate::vinegar::studio_dir();
     }
 
-    let install_dir = version_install_dir(app, version_guid)?;
+    let paths = Paths::resolve(app)?;
+    let install_dir = version_install_dir(&paths, version_guid);
     let manifest_path = version_manifest_path(&install_dir);
 
     if !manifest_path.exists() {
@@ -72,25 +89,21 @@ pub(crate) fn installed_studio_target(app: &AppHandle, version_guid: &str) -> Re
 }
 
 #[tauri::command]
-pub async fn list_studio_versions(app: AppHandle) -> Result<StudioVersionsResponse, String> {
-    list_studio_versions_inner(&app)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn list_studio_versions(app: AppHandle) -> CommandResult<StudioVersionsResponse> {
+    Ok(list_studio_versions_inner(&app).await?)
 }
 
 #[tauri::command]
 pub async fn install_latest_studio(
     app: AppHandle,
     state: State<'_, StudioState>,
-) -> Result<StudioVersionEntry, String> {
+) -> CommandResult<StudioVersionEntry> {
     let _guard = state
         .install_lock
         .try_lock()
-        .map_err(|_| "A Studio installation is already in progress.".to_string())?;
+        .map_err(|_| AppError::Failed("A Studio installation is already in progress.".into()))?;
 
-    let version_info = api::fetch_current_version(CURRENT_CHANNEL)
-        .await
-        .map_err(|error| error.to_string())?;
+    let version_info = api::fetch_current_version(CURRENT_CHANNEL).await?;
 
     info!(
         channel = CURRENT_CHANNEL,
@@ -99,15 +112,14 @@ pub async fn install_latest_studio(
         "installing latest Studio version"
     );
 
-    install_studio_version_inner(
+    Ok(install_studio_version_inner(
         &app,
         &version_info.client_version_upload,
         &version_info.version,
         CURRENT_CHANNEL,
         None,
     )
-    .await
-    .map_err(|error| error.to_string())
+    .await?)
 }
 
 #[tauri::command]
@@ -118,37 +130,31 @@ pub async fn install_studio_version(
     version: String,
     channel: Option<String>,
     published_at: Option<String>,
-) -> Result<StudioVersionEntry, String> {
+) -> CommandResult<StudioVersionEntry> {
     let _guard = state
         .install_lock
         .try_lock()
-        .map_err(|_| "A Studio installation is already in progress.".to_string())?;
+        .map_err(|_| AppError::Failed("A Studio installation is already in progress.".into()))?;
 
     let channel = channel.unwrap_or_else(|| CURRENT_CHANNEL.to_string());
 
     info!(version_guid, version, channel, "installing requested Studio version");
 
-    install_studio_version_inner(
-        &app,
-        &version_guid,
-        &version,
-        &channel,
-        published_at.as_deref(),
-    )
-        .await
-    .map_err(|error| error.to_string())
+    Ok(install_studio_version_inner(&app, &version_guid, &version, &channel, published_at.as_deref())
+        .await?)
 }
 
 #[tauri::command]
 pub async fn set_default_studio_version(
     app: AppHandle,
     version_guid: Option<String>,
-) -> Result<(), String> {
-    let mut preferences = load_studio_preferences(&app).map_err(|error| error.to_string())?;
+) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let mut preferences = load_studio_preferences(&paths)?;
 
     preferences.default_version_guid = match version_guid {
         Some(version_guid) => {
-            let installed_versions = discover_installed_versions(&app).map_err(|error| error.to_string())?;
+            let installed_versions = discover_installed_versions(&paths)?;
             let target_version = installed_versions
                 .into_iter()
                 .find(|version| {
@@ -156,56 +162,75 @@ pub async fn set_default_studio_version(
                         && version.executable_path.is_some()
                         && api::same_version_guid(&version.version_guid, &version_guid)
                 })
-                .ok_or_else(|| "The selected Studio version is not installed.".to_string())?;
+                .ok_or_else(|| {
+                    AppError::Failed("The selected Studio version is not installed.".into())
+                })?;
 
             Some(target_version.version_guid)
         }
         None => None,
     };
 
-    save_studio_preferences(&app, &preferences)
-        .await
-        .map_err(|error| error.to_string())
+    Ok(save_studio_preferences(&paths, &preferences).await?)
 }
 
 #[tauri::command]
-pub async fn launch_studio(app: AppHandle, version_guid: String) -> Result<(), String> {
-    let install_dir = version_install_dir(&app, &version_guid).map_err(|error| error.to_string())?;
-    let manifest_path = version_manifest_path(&install_dir);
+pub async fn launch_studio(
+    app: AppHandle,
+    version_guid: String,
+    uri: Option<String>,
+) -> CommandResult<()> {
+    Ok(launch_studio_inner(&app, &version_guid, uri.as_deref()).await?)
+}
 
-    if !manifest_path.exists() {
-        return Err("The selected Studio version is not installed.".to_string());
-    }
-
-    let _manifest = read_installed_manifest(&manifest_path).map_err(|error| error.to_string())?;
-    let executable_path = version_executable_path(&install_dir);
-
-    if !executable_path.exists() {
-        return Err("RobloxStudioBeta.exe was not found for the selected version.".to_string());
-    }
-
+async fn launch_studio_inner(app: &AppHandle, version_guid: &str, uri: Option<&str>) -> Result<()> {
     if !cfg!(target_os = "windows") {
-        return Err(
+        bail!(
             "Launching Studio directly is only available on Windows. On Linux, run Studio through Vinegar."
-                .to_string(),
         );
     }
 
-    apply_saved_preferences_to_install_dir(&app, &install_dir)
-        .await
-        .map_err(|error| error.to_string())?;
+    let paths = Paths::resolve(app)?;
+    let install_dir = version_install_dir(&paths, version_guid);
+    let manifest_path = version_manifest_path(&install_dir);
 
+    if !manifest_path.exists() {
+        bail!("The selected Studio version is not installed.");
+    }
+
+    read_installed_manifest(&manifest_path)?;
+    apply_saved_preferences_to_install_dir(&paths, &install_dir).await?;
+    spawn_studio(install_dir, uri).await
+}
+
+async fn spawn_studio(install_dir: PathBuf, uri: Option<&str>) -> Result<()> {
+    let launcher = version_launcher_path(&install_dir);
+    let executable = version_executable_path(&install_dir);
+    let program = if uri.is_some() && launcher.exists() {
+        launcher
+    } else {
+        executable
+    };
+
+    if !program.exists() {
+        bail!("Studio was not found in {}", install_dir.display());
+    }
+
+    let uri = uri.map(str::to_string);
     tokio::task::spawn_blocking(move || -> Result<()> {
-        Command::new(&executable_path)
-            .current_dir(&install_dir)
+        let mut command = Command::new(&program);
+        command.current_dir(&install_dir);
+        if let Some(uri) = &uri {
+            command.arg(uri);
+        }
+        command
             .spawn()
-            .with_context(|| format!("failed to launch {}", executable_path.display()))?;
+            .with_context(|| format!("failed to launch {}", program.display()))?;
 
         Ok(())
     })
     .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())
+    .context("the Studio launch task failed to join")?
 }
 
 #[tauri::command]
@@ -213,16 +238,16 @@ pub async fn revalidate_studio_version(
     app: AppHandle,
     state: State<'_, StudioState>,
     version_guid: String,
-) -> Result<StudioVersionEntry, String> {
-    let _guard = state
-        .install_lock
-        .try_lock()
-        .map_err(|_| "Cannot revalidate Studio while another installation is running.".to_string())?;
+) -> CommandResult<StudioVersionEntry> {
+    let _guard = state.install_lock.try_lock().map_err(|_| {
+        AppError::Failed("Cannot revalidate Studio while another installation is running.".into())
+    })?;
 
-    let manifest = revalidate_version(&app, &version_guid)
-        .await
-        .map_err(|error| error.to_string())?;
-    let install_dir = version_install_dir(&app, &manifest.version_guid).map_err(|error| error.to_string())?;
+    let paths = Paths::resolve(&app)?;
+    let install_dir = version_install_dir(&paths, &version_guid);
+    let downloads_root = downloads_dir(&paths);
+    let manifest = revalidate_version(install_dir, downloads_root, &version_guid).await?;
+    let install_dir = version_install_dir(&paths, &manifest.version_guid);
     let executable_path = version_executable_path(&install_dir);
     let mut entry = StudioVersionEntry::from_installed(
         manifest,
@@ -240,15 +265,18 @@ pub async fn revalidate_studio_version(
 }
 
 #[tauri::command]
-pub async fn open_studio_install_dir(app: AppHandle, version_guid: String) -> Result<(), String> {
-    let install_dir = version_install_dir(&app, &version_guid).map_err(|error| error.to_string())?;
+pub async fn open_studio_install_dir(app: AppHandle, version_guid: String) -> CommandResult<()> {
+    let paths = Paths::resolve(&app)?;
+    let install_dir = version_install_dir(&paths, &version_guid);
     let manifest_path = version_manifest_path(&install_dir);
 
     if !manifest_path.exists() {
-        return Err("The selected Studio version is not installed.".to_string());
+        return Err(AppError::Failed(
+            "The selected Studio version is not installed.".into(),
+        ));
     }
 
-    crate::platform::reveal_path(&install_dir).map_err(|error| error.to_string())
+    Ok(crate::platform::reveal_path(&install_dir)?)
 }
 
 #[tauri::command]
@@ -256,26 +284,26 @@ pub async fn uninstall_studio(
     app: AppHandle,
     state: State<'_, StudioState>,
     version_guid: String,
-) -> Result<(), String> {
-    let _guard = state
-        .install_lock
-        .try_lock()
-        .map_err(|_| "Cannot uninstall Studio while another installation is running.".to_string())?;
+) -> CommandResult<()> {
+    let _guard = state.install_lock.try_lock().map_err(|_| {
+        AppError::Failed("Cannot uninstall Studio while another installation is running.".into())
+    })?;
 
-    let install_dir = version_install_dir(&app, &version_guid).map_err(|error| error.to_string())?;
-    let download_dir = version_download_dir(&app, &version_guid).map_err(|error| error.to_string())?;
+    let paths = Paths::resolve(&app)?;
+    let install_dir = version_install_dir(&paths, &version_guid);
+    let download_dir = version_download_dir(&paths, &version_guid);
 
     if install_dir.exists() {
         tokio_fs::remove_dir_all(&install_dir)
             .await
-            .map_err(|error| error.to_string())?;
+            .with_context(|| format!("failed to remove {}", install_dir.display()))?;
     }
 
     if download_dir.exists() {
         let _ = tokio_fs::remove_dir_all(&download_dir).await;
     }
 
-    let mut preferences = load_studio_preferences(&app).map_err(|error| error.to_string())?;
+    let mut preferences = load_studio_preferences(&paths)?;
     if preferences
         .default_version_guid
         .as_deref()
@@ -283,17 +311,16 @@ pub async fn uninstall_studio(
         .unwrap_or(false)
     {
         preferences.default_version_guid = None;
-        save_studio_preferences(&app, &preferences)
-            .await
-            .map_err(|error| error.to_string())?;
+        save_studio_preferences(&paths, &preferences).await?;
     }
 
     Ok(())
 }
 
 async fn list_studio_versions_inner(app: &AppHandle) -> Result<StudioVersionsResponse> {
-    let mut versions = discover_installed_versions(app)?;
-    let preferences = load_studio_preferences(app).unwrap_or_default();
+    let paths = Paths::resolve(app)?;
+    let mut versions = discover_installed_versions(&paths)?;
+    let preferences = load_studio_preferences(&paths).unwrap_or_default();
     let latest_remote = api::fetch_current_version(CURRENT_CHANNEL).await.ok();
 
     if let Some(latest_remote) = latest_remote.as_ref() {
@@ -347,11 +374,23 @@ async fn install_studio_version_inner(
     channel: &str,
     published_at: Option<&str>,
 ) -> Result<StudioVersionEntry> {
-    let manifest = install_version(app, version_guid, version, channel, published_at).await?;
-    let install_dir = version_install_dir(app, &manifest.version_guid)?;
+    let paths = Paths::resolve(app)?;
+    let install_dir = version_install_dir(&paths, version_guid);
+    let download_dir = version_download_dir(&paths, version_guid);
+    let manifest = install_version(
+        &EventSink { app },
+        install_dir,
+        download_dir,
+        version_guid,
+        version,
+        channel,
+        published_at,
+    )
+    .await?;
+    let install_dir = version_install_dir(&paths, &manifest.version_guid);
     let executable_path = version_executable_path(&install_dir);
 
-    apply_saved_preferences_to_install_dir(app, &install_dir).await?;
+    apply_saved_preferences_to_install_dir(&paths, &install_dir).await?;
 
     Ok(StudioVersionEntry::from_installed(
         manifest,

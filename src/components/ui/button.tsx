@@ -4,7 +4,7 @@ import { createContext, forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type ButtonVariant = "primary" | "ghost" | "danger";
-type ButtonSize = "sm" | "md" | "icon";
+type ButtonSize = "sm" | "md" | "icon" | "icon-sm";
 
 interface ButtonContextValue {
   variant: ButtonVariant;
@@ -22,9 +22,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-[11.5px] gap-1.5",
-  md: "px-3.5 py-[7px] text-[12.5px] gap-1.75",
-  icon: "p-[7px]",
+  sm: "h-7 px-3 text-[11.5px] gap-1.5",
+  md: "h-8 px-3.5 text-[12.5px] gap-1.75",
+  icon: "h-8 w-8",
+  "icon-sm": "h-7 w-7",
 };
 
 export interface ButtonRootProps extends Omit<HTMLMotionProps<"button">, "type"> {

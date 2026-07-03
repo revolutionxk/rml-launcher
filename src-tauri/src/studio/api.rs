@@ -219,10 +219,7 @@ fn parse_package_manifest(data: &str) -> Result<Vec<PackageManifestEntry>> {
 
     let mut packages = Vec::new();
 
-    loop {
-        let Some(name) = lines.next() else {
-            break;
-        };
+    while let Some(name) = lines.next() {
         let Some(signature) = lines.next() else {
             break;
         };

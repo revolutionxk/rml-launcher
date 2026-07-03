@@ -55,7 +55,7 @@ impl Default for EngineVersionPreferences {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EnginePreferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -64,16 +64,6 @@ pub struct EnginePreferences {
     pub default_profile: EngineVersionPreferences,
     #[serde(default)]
     pub version_profiles: BTreeMap<String, EngineVersionPreferences>,
-}
-
-impl Default for EnginePreferences {
-    fn default() -> Self {
-        Self {
-            selected_target_version_guid: None,
-            default_profile: EngineVersionPreferences::default(),
-            version_profiles: BTreeMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

@@ -29,8 +29,8 @@ export function FlagValueEditor({ name, value, onChange }: FlagValueEditorProps)
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "w-28 text-right bg-surface border border-border rounded-sm",
-          "text-[12px] font-code text-text px-2.5 py-[7px]",
+          "w-28 h-8 text-right bg-surface border border-border rounded-sm",
+          "text-[12px] font-code text-text px-2.5",
           "outline-none transition-[border-color,box-shadow] duration-200",
           "focus:border-border-focus focus:ring-2 focus:ring-accent/20",
           "[appearance:textfield]",

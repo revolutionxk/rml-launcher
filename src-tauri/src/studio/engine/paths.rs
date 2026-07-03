@@ -1,27 +1,21 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use tauri::{AppHandle, Manager};
+use crate::Paths;
 
-pub fn engine_root_dir(app: &AppHandle) -> Result<PathBuf> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .context("failed to resolve the app data directory")?;
-
-    Ok(app_data_dir.join("engine"))
+pub fn engine_root_dir(paths: &Paths) -> PathBuf {
+    paths.data_dir().join("engine")
 }
 
-pub fn preferences_path(app: &AppHandle) -> Result<PathBuf> {
-    Ok(engine_root_dir(app)?.join("settings.json"))
+pub fn preferences_path(paths: &Paths) -> PathBuf {
+    engine_root_dir(paths).join("settings.json")
 }
 
-pub fn scan_cache_dir(app: &AppHandle) -> Result<PathBuf> {
-    Ok(engine_root_dir(app)?.join("scans"))
+pub fn scan_cache_dir(paths: &Paths) -> PathBuf {
+    engine_root_dir(paths).join("scans")
 }
 
-pub fn scan_cache_path(app: &AppHandle, version_guid: &str) -> Result<PathBuf> {
-    Ok(scan_cache_dir(app)?.join(format!("{version_guid}.json")))
+pub fn scan_cache_path(paths: &Paths, version_guid: &str) -> PathBuf {
+    scan_cache_dir(paths).join(format!("{version_guid}.json"))
 }
 
 pub fn client_settings_dir(install_dir: &Path) -> PathBuf {

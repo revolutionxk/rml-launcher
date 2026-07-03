@@ -1,13 +1,27 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, Cpu, FolderOpen, Play, RefreshCw, Star, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Cpu,
+  FolderOpen,
+  MoreHorizontal,
+  Package,
+  Play,
+  Puzzle,
+  Star,
+  Trash2,
+} from "lucide-react";
+import { motion } from "motion/react";
 import { useState } from "react";
 
 import { ModLoaderPanel } from "@/components/instance/mod-loader-panel";
 import { ModsPanel } from "@/components/instance/mods-panel";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Menu } from "@/components/ui/menu";
+import { LoadingState, Spinner } from "@/components/ui/spinner";
+import { Tabs } from "@/components/ui/tabs";
 import { useI18n } from "@/i18n";
 import { getErrorMessage } from "@/lib/format";
 import { queryKeys, useInstances } from "@/lib/queries";
@@ -17,10 +31,31 @@ import {
   setDefaultStudioVersion,
   uninstallStudio,
 } from "@/lib/studio";
+import { cn } from "@/lib/utils";
+import { EngineFlags } from "@/routes/settings/engine";
 
 export const Route = createFileRoute("/settings/instances/$versionGuid")({
   component: InstanceDetailPage,
 });
+
+type InstanceTab = "mods" | "flags";
+
+const MORPH_TRANSITION = {
+  duration: 0.42,
+  ease: [0.32, 0.72, 0, 1] as [number, number, number, number],
+};
+
+function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      className="flex w-fit shrink-0 items-center gap-1.5 rounded-sm text-[12.5px] text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent/40"
+      onClick={onClick}
+    >
+      <ArrowLeft size={13} />
+      {label}
+    </button>
+  );
+}
 
 function InstanceDetailPage() {
   const { formatDate, t } = useI18n();
@@ -31,6 +66,7 @@ function InstanceDetailPage() {
 
   const instance = instances.find((candidate) => candidate.versionGuid === versionGuid) ?? null;
 
+  const [tab, setTab] = useState<InstanceTab>("mods");
   const [launching, setLaunching] = useState(false);
   const [defaulting, setDefaulting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -44,7 +80,11 @@ function InstanceDetailPage() {
     try {
       await launchStudio(versionGuid);
     } catch (error) {
-      setErrorMessage(t("instances-error-launch", { message: getErrorMessage(error, t("instances-error-generic")) }));
+      setErrorMessage(
+        t("instances-error-launch", {
+          message: getErrorMessage(error, t("instances-error-generic")),
+        }),
+      );
     } finally {
       setLaunching(false);
     }
@@ -67,10 +107,10 @@ function InstanceDetailPage() {
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirm(t("instances-delete-confirm", { version: instance?.version ?? "" }), {
-      title: t("instances-delete"),
-      kind: "warning",
-    });
+    const confirmed = await confirm(
+      t("instances-delete-confirm", { version: instance?.version ?? "" }),
+      { title: t("instances-delete"), kind: "warning" },
+    );
     if (!confirmed) {
       return;
     }
@@ -82,123 +122,195 @@ function InstanceDetailPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.instances });
       goBack();
     } catch (error) {
-      setErrorMessage(t("instances-error-delete", { message: getErrorMessage(error, t("instances-error-generic")) }));
+      setErrorMessage(
+        t("instances-error-delete", {
+          message: getErrorMessage(error, t("instances-error-generic")),
+        }),
+      );
       setDeleting(false);
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
-        {t("instances-loading")}
-      </div>
-    );
+    return <LoadingState label={t("instances-loading")} />;
   }
 
   if (!instance) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <button
-          className="flex items-center gap-1.5 text-[12.5px] text-text-muted transition-colors hover:text-text"
-          onClick={goBack}
-        >
-          <ArrowLeft size={13} />
-          {t("instances-back")}
-        </button>
-        <div className="rounded-sm border border-border bg-card px-4 py-4 text-[12.5px] text-text-muted">
+        <BackLink label={t("instances-back")} onClick={goBack} />
+        <Callout variant="warning" className="w-full">
           {t("instances-not-found")}
-        </div>
+        </Callout>
       </div>
     );
   }
 
+  const isReady = Boolean(instance.executablePath);
   const isBusy = launching || defaulting || deleting;
 
   return (
-    <div className="flex flex-col gap-4">
-      <button
-        className="flex w-fit items-center gap-1.5 text-[12.5px] text-text-muted transition-colors hover:text-text"
-        onClick={goBack}
+    <div className="flex h-full min-h-0 flex-col gap-3 lg:gap-4">
+      <BackLink label={t("instances-back")} onClick={goBack} />
+      <motion.div
+        layoutId={`studio-card-${versionGuid}`}
+        transition={MORPH_TRANSITION}
+        className={cn(
+          "shrink-0 overflow-hidden rounded-lg border p-3.5 shadow-(--card-shadow) lg:p-4",
+          instance.isDefault ? "border-accent/35" : "border-border bg-card",
+        )}
+        style={
+          instance.isDefault
+            ? { backgroundColor: "color-mix(in srgb, var(--color-accent) 5%, transparent)" }
+            : undefined
+        }
       >
-        <ArrowLeft size={13} />
-        {t("instances-back")}
-      </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <motion.div
+            layoutId={`studio-avatar-${versionGuid}`}
+            transition={MORPH_TRANSITION}
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-sm",
+              instance.isDefault ? "bg-accent-muted text-accent" : "bg-surface-2 text-text-muted",
+            )}
+          >
+            <Package size={18} />
+          </motion.div>
 
-      <div className="rounded-sm border border-border bg-card p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <h1 className="text-[16px] font-semibold tracking-[-0.018em] text-text">
+              <motion.h1
+                layoutId={`studio-title-${versionGuid}`}
+                transition={MORPH_TRANSITION}
+                className="text-[16px] font-semibold tracking-[-0.015em] text-text"
+              >
                 {t("versions-studio-label", { version: instance.version })}
-              </h1>
+              </motion.h1>
               {instance.isDefault && (
-                <Badge.Root variant="yellow">
-                  <Badge.Icon>
-                    <Star size={9} />
-                  </Badge.Icon>
-                  <Badge.Label>{t("versions-badge-default")}</Badge.Label>
-                </Badge.Root>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.25, delay: 0.1, ease: "easeOut" }}
+                  className="rounded-full bg-accent-muted px-1.5 py-0.5 text-[10px] font-semibold text-accent"
+                >
+                  {t("versions-badge-default")}
+                </motion.span>
               )}
             </div>
-            <div className="mt-1 truncate text-[11px] text-text-dim">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.25, delay: 0.1, ease: "easeOut" }}
+              className="mt-0.5 truncate text-[11px] text-text-muted"
+            >
+              {isReady ? t("instances-ready") : t("instances-not-installed")}
               {instance.installedAt
-                ? t("instances-installed-at", { date: formatDate(instance.installedAt) })
-                : instance.versionGuid}
-            </div>
+                ? ` · ${t("instances-installed-at", { date: formatDate(instance.installedAt) })}`
+                : ""}
+            </motion.div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25, delay: 0.06, ease: "easeOut" }}
+            className="flex shrink-0 items-center gap-2"
+          >
             <Button.Root
               variant="primary"
-              disabled={isBusy || !instance.executablePath}
+              disabled={isBusy || !isReady}
               onClick={() => void handleLaunch()}
             >
-              <Button.Icon>
-                {launching ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
-              </Button.Icon>
+              <Button.Icon>{launching ? <Spinner size={13} /> : <Play size={13} />}</Button.Icon>
               <Button.Label>{t("instances-launch")}</Button.Label>
             </Button.Root>
-            <Button.Root variant="ghost" disabled={isBusy} onClick={() => void handleToggleDefault()}>
-              <Button.Icon>
-                <Star size={13} className={instance.isDefault ? "text-yellow" : undefined} />
-              </Button.Icon>
-              <Button.Label>
-                {instance.isDefault ? t("versions-clear-default") : t("versions-set-default")}
-              </Button.Label>
-            </Button.Root>
-            <Button.Root
-              variant="ghost"
-              onClick={() => openStudioInstallDir(versionGuid).catch(console.error)}
-            >
-              <Button.Icon>
-                <FolderOpen size={13} />
-              </Button.Icon>
-              <Button.Label>{t("versions-open-folder")}</Button.Label>
-            </Button.Root>
-            <Button.Root variant="ghost" onClick={() => navigate({ to: "/settings/engine" })}>
-              <Button.Icon>
-                <Cpu size={13} />
-              </Button.Icon>
-              <Button.Label>{t("instances-engine-flags")}</Button.Label>
-            </Button.Root>
-            <Button.Root variant="danger" disabled={isBusy} onClick={() => void handleDelete()}>
-              <Button.Icon>
-                {deleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-              </Button.Icon>
-              <Button.Label>{t("instances-delete")}</Button.Label>
-            </Button.Root>
-          </div>
+
+            <Menu.Root>
+              <Menu.Trigger
+                render={
+                  <Button.Root
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("versions-actions")}
+                    disabled={isBusy}
+                  >
+                    <Button.Icon>
+                      <MoreHorizontal size={15} />
+                    </Button.Icon>
+                  </Button.Root>
+                }
+              />
+              <Menu.Portal>
+                <Menu.Positioner>
+                  <Menu.Popup>
+                    <Menu.Item disabled={isBusy} onClick={() => void handleToggleDefault()}>
+                      <span
+                        className={`flex h-[14px] w-[14px] items-center justify-center ${
+                          instance.isDefault ? "text-yellow" : "text-text-dim"
+                        }`}
+                      >
+                        <Star size={13} />
+                      </span>
+                      <span>
+                        {instance.isDefault
+                          ? t("versions-clear-default")
+                          : t("versions-set-default")}
+                      </span>
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() => openStudioInstallDir(versionGuid).catch(console.error)}
+                    >
+                      <span className="flex h-[14px] w-[14px] items-center justify-center text-text-dim">
+                        <FolderOpen size={13} />
+                      </span>
+                      <span>{t("versions-open-folder")}</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      disabled={isBusy}
+                      className="text-red data-[highlighted]:text-red"
+                      onClick={() => void handleDelete()}
+                    >
+                      <span className="flex h-[14px] w-[14px] items-center justify-center text-red/85">
+                        <Trash2 size={13} />
+                      </span>
+                      <span>{t("instances-delete")}</span>
+                    </Menu.Item>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
       {errorMessage && (
-        <div className="rounded-sm border border-red/25 bg-red-muted px-4 py-3 text-[12px] text-text">
+        <Callout variant="danger" className="shrink-0">
           {errorMessage}
-        </div>
+        </Callout>
       )}
 
-      <ModLoaderPanel versionGuid={versionGuid} installed={instance.modloader} />
-      <ModsPanel versionGuid={versionGuid} />
+      <Tabs<InstanceTab>
+        className="shrink-0"
+        value={tab}
+        onValueChange={setTab}
+        tabs={[
+          { value: "mods", label: t("instances-tab-mods"), icon: <Puzzle /> },
+          { value: "flags", label: t("instances-tab-flags"), icon: <Cpu /> },
+        ]}
+      />
+
+      <div className="min-h-0 flex-1">
+        {tab === "mods" ? (
+          <div className="h-full overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+            <div className="flex flex-col gap-4 pb-1">
+              <ModLoaderPanel versionGuid={versionGuid} installed={instance.modloader} />
+              <ModsPanel versionGuid={versionGuid} />
+            </div>
+          </div>
+        ) : (
+          <EngineFlags embeddedTargetVersionGuid={versionGuid} />
+        )}
+      </div>
     </div>
   );
 }

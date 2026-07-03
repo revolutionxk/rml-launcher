@@ -41,7 +41,7 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
         className={cn(
           "w-full bg-surface border border-border rounded-sm",
           "text-[13px] text-text font-[inherit]",
-          "px-[11px] py-[7px]",
+          "h-8 px-2.75",
           "outline-none transition-[border-color,box-shadow] duration-200",
           "placeholder:text-text-dim",
           "focus:border-border-focus focus:ring-2 focus:ring-accent/20",

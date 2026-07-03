@@ -57,8 +57,8 @@ export async function installStudioVersion(version: StudioVersionRecord) {
   });
 }
 
-export async function launchStudio(versionGuid: string) {
-  return invoke<void>("launch_studio", { versionGuid });
+export async function launchStudio(versionGuid: string, uri?: string | null) {
+  return invoke<void>("launch_studio", { versionGuid, uri: uri ?? null });
 }
 
 export async function openStudioInstallDir(versionGuid: string) {

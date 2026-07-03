@@ -1,159 +1,450 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Play, Download, Settings, HelpCircle, ExternalLink } from "lucide-react";
+import {
+  ArrowRight,
+  Download,
+  Package,
+  Play,
+  Puzzle,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 
-import ActionButton from "@/components/action-button";
+import { PlatformNotice } from "@/components/platform-notice";
 import Logo from "@/components/logo";
-import { APP_NAME, APP_VERSION } from "@/constants/app";
-import { LINKS, RML_WIKI_URL } from "@/constants/links";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { SetupPath, type SetupStep } from "@/components/ui/setup-path";
+import { LoadingState } from "@/components/ui/spinner";
+import { RML_DISCORD_URL, RML_WIKI_URL } from "@/constants/links";
 import { useI18n } from "@/i18n";
-import { launchStudio, listStudioVersions } from "@/lib/studio";
+import { getErrorMessage } from "@/lib/format";
+import type { InstanceSummary } from "@/lib/instances";
+import { useHostInfo, useInstances } from "@/lib/queries";
+import { launchStudio } from "@/lib/studio";
+import { useSetupStore } from "@/stores/setup";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+const SETUP_STEP_COUNT = 2;
+
 function HomePage() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const [isLaunching, setIsLaunching] = useState(false);
+  const { data: host } = useHostInfo();
+  const { data: instances = [], isLoading } = useInstances();
 
-  const handleLink = (href: string) => {
-    openUrl(href).catch(console.error);
-  };
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleLaunch = async () => {
-    setIsLaunching(true);
+  const readyInstances = instances.filter((instance) => instance.executablePath);
+  const target =
+    readyInstances.find((instance) => instance.isDefault) ?? readyInstances[0] ?? null;
 
+  const loaderDeferred = useSetupStore((s) => s.loaderDeferred);
+  const deferLoader = useSetupStore((s) => s.deferLoader);
+
+  const hasStudio = readyInstances.length > 0;
+  const hasLoader = Boolean(target?.modloader);
+  const hasMods = (target?.modsTotal ?? 0) > 0;
+  const doneCount = [hasStudio, hasLoader].filter(Boolean).length;
+  
+  const setupUsable = hasStudio && (hasLoader || loaderDeferred);
+
+  const isLinux = host?.os === "linux";
+  const isWindows = !host || host.os === "windows";
+
+  const handleLaunch = async (versionGuid: string) => {
+    setLaunchingId(versionGuid);
+    setErrorMessage(null);
     try {
-      const versions = await listStudioVersions();
-      const preferredInstalled =
-        versions.find(
-          (version) => version.isInstalled && version.isDefault && version.executablePath,
-        ) ?? versions.find((version) => version.isInstalled && version.executablePath);
-
-      if (!preferredInstalled) {
-        navigate({ to: "/settings/versions" });
-        return;
-      }
-
-      await launchStudio(preferredInstalled.versionGuid);
+      await launchStudio(versionGuid);
     } catch (error) {
-      console.error(error);
+      setErrorMessage(
+        t("instances-error-launch", {
+          message: getErrorMessage(error, t("instances-error-generic")),
+        }),
+      );
     } finally {
-      setIsLaunching(false);
+      setLaunchingId(null);
     }
   };
 
+  const openInstance = (versionGuid: string) =>
+    navigate({ to: "/settings/instances/$versionGuid", params: { versionGuid } });
+
+  const setupSteps: SetupStep[] = (() => {
+    const definitions = [
+      {
+        id: "studio",
+        done: hasStudio,
+        title: t("home-step-studio-title"),
+        description: t("home-step-studio-description"),
+        action: {
+          label: t("home-step-studio-action"),
+          icon: <Download size={14} />,
+          onClick: () => navigate({ to: "/settings/versions" }),
+        },
+        secondaryAction: undefined as SetupStep["secondaryAction"],
+        hint: undefined as SetupStep["hint"],
+      },
+      {
+        id: "loader",
+        done: hasLoader,
+        title: t("home-step-loader-title"),
+        description: t("home-step-loader-description"),
+        action: {
+          label: t("home-step-loader-action"),
+          icon: <ShieldCheck size={14} />,
+          onClick: () => target && openInstance(target.versionGuid),
+        },
+        secondaryAction: {
+          label: t("home-step-loader-skip"),
+          onClick: deferLoader,
+        },
+        hint: t("home-step-loader-hint") as SetupStep["hint"],
+      },
+    ];
+
+    const currentIndex = definitions.findIndex((step) => !step.done);
+
+    return definitions.map((step, index) => {
+      const isCurrent = index === currentIndex && !step.done;
+      return {
+        id: step.id,
+        title: step.title,
+        description: step.description,
+        status: step.done ? "done" : index === currentIndex ? "current" : "locked",
+        action: isCurrent ? step.action : undefined,
+        secondaryAction: isCurrent ? step.secondaryAction : undefined,
+        hint: isCurrent ? step.hint : undefined,
+      };
+    });
+  })();
+
   return (
-    <motion.div
-      className="home-page flex h-full overflow-hidden relative"
-      initial={{ opacity: 0, x: -16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+    <div
+      className="h-full overflow-y-auto px-5 py-5 lg:px-8 lg:py-8"
+      style={{ scrollbarGutter: "stable" }}
     >
-      <div className="w-68 shrink-0 flex flex-col px-6 py-7 border-r border-border-subtle bg-surface relative">
-        <motion.div
-          className="flex items-center gap-3 mb-6"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.25 }}
-        >
-          <Logo size={44} />
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[15px] font-semibold text-text tracking-[-0.018em]">
-              {APP_NAME}
-            </div>
-            <div className="text-[11.5px] text-text-muted">
-              {t("common-version", { version: APP_VERSION })}
-            </div>
+      <motion.div
+        className="mx-auto flex w-full max-w-3xl flex-col gap-7"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: [0.25, 0.1, 0.25, 1] }}
+      >
+        <header className="flex items-start gap-4">
+          <div className="mt-0.5 shrink-0">
+            <Logo size={48} />
           </div>
-        </motion.div>
+          <div className="min-w-0">
+            <h1 className="text-[22px] font-semibold leading-[1.2] tracking-[-0.02em] text-text">
+              {t("home-hero-title")}
+            </h1>
+            <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-text-muted">
+              {t("home-hero-subtitle")}
+            </p>
+          </div>
+        </header>
 
-        <div className="h-px bg-border-subtle mb-4" />
+        <PlatformNotice />
 
-        <motion.div
-          className="flex flex-col gap-0.5"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1, duration: 0.25 }}
-        >
-          {LINKS.map((link) => (
-            <button
-              key={link.labelId}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-sm text-text-muted text-[12.5px] cursor-pointer bg-transparent border-none text-left w-full transition-[background,color] duration-120 hover:bg-surface-2 hover:text-text [&_svg]:shrink-0"
-              onClick={() => handleLink(link.href)}
+        {errorMessage && <Callout variant="danger">{errorMessage}</Callout>}
+
+        {isLoading ? (
+          <LoadingState label={t("home-loading")} />
+        ) : !isWindows ? (
+          isLinux ? (
+            <Callout
+              variant="info"
+              title={t("vinegar-studio-title")}
+              action={
+                <Button.Root
+                  variant="primary"
+                  onClick={() => navigate({ to: "/settings/instances" })}
+                >
+                  <Button.Label>{t("nav-studios")}</Button.Label>
+                  <Button.Icon>
+                    <ArrowRight size={14} />
+                  </Button.Icon>
+                </Button.Root>
+              }
             >
-              {link.icon}
-              <span>{t(link.labelId)}</span>
-              <ExternalLink size={10} className="ml-auto opacity-35" />
-            </button>
-          ))}
-        </motion.div>
+              {t("vinegar-studio-description")}
+            </Callout>
+          ) : null
+        ) : setupUsable && target ? (
+          <ReadyDashboard
+            target={target}
+            instances={readyInstances}
+            launchingId={launchingId}
+            hasLoader={hasLoader}
+            hasMods={hasMods}
+            onLaunch={handleLaunch}
+            onConfigure={openInstance}
+            onOpenTarget={() => openInstance(target.versionGuid)}
+            t={t}
+          />
+        ) : (
+          <section className="rounded-lg border border-border bg-card p-6 shadow-(--card-shadow)">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-text">
+                {t("home-setup-title")}
+              </h2>
+              <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[10.5px] font-medium tabular-nums text-text-muted">
+                {t("home-setup-progress", { done: doneCount, total: SETUP_STEP_COUNT })}
+              </span>
+            </div>
+            <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <motion.div
+                className="h-full rounded-full bg-accent"
+                initial={false}
+                animate={{ width: `${(doneCount / SETUP_STEP_COUNT) * 100}%` }}
+                transition={{ type: "spring", stiffness: 200, damping: 30 }}
+              />
+            </div>
+
+            <SetupPath steps={setupSteps} />
+
+            {hasStudio && target && (
+              <div className="mt-5 border-t border-border-subtle pt-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-sm text-[12px] text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent/40"
+                  disabled={launchingId !== null}
+                  onClick={() => void handleLaunch(target.versionGuid)}
+                >
+                  {launchingId === target.versionGuid ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : (
+                    <Play size={13} />
+                  )}
+                  {t("home-setup-skip")}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+interface ReadyDashboardProps {
+  target: InstanceSummary;
+  instances: InstanceSummary[];
+  launchingId: string | null;
+  hasLoader: boolean;
+  hasMods: boolean;
+  onLaunch: (versionGuid: string) => void;
+  onConfigure: (versionGuid: string) => void;
+  onOpenTarget: () => void;
+  t: ReturnType<typeof useI18n>["t"];
+}
+
+function ReadyDashboard({
+  target,
+  instances,
+  launchingId,
+  hasLoader,
+  hasMods,
+  onLaunch,
+  onConfigure,
+  onOpenTarget,
+  t,
+}: ReadyDashboardProps) {
+  const subtitle = !target.isDefault
+    ? t("home-ready-no-default")
+    : t(hasLoader && hasMods ? "home-ready-subtitle" : "home-ready-subtitle-plain", {
+        version: t("versions-studio-label", { version: target.version }),
+      });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section
+        className="rounded-lg border p-6"
+        style={{
+          borderColor: "color-mix(in srgb, var(--color-accent) 30%, transparent)",
+          backgroundColor: "color-mix(in srgb, var(--color-accent) 6%, transparent)",
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg icon-box--blue">
+            <Play size={22} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-green">
+              {t("home-ready-eyebrow")}
+            </div>
+            <div className="text-[18px] font-semibold leading-tight tracking-[-0.015em] text-text">
+              {t("home-ready-title")}
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-text-muted">{subtitle}</div>
+          </div>
+          <Button.Root
+            variant="primary"
+            className="px-5 py-2.5 text-[13px]"
+            disabled={launchingId !== null}
+            onClick={() => onLaunch(target.versionGuid)}
+          >
+            <Button.Icon>
+              {launchingId === target.versionGuid ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <Play size={15} />
+              )}
+            </Button.Icon>
+            <Button.Label>{t("home-ready-launch")}</Button.Label>
+          </Button.Root>
+        </div>
+      </section>
+
+      {!hasLoader ? (
+        <Callout
+          variant="info"
+          title={t("home-unlock-title")}
+          action={
+            <Button.Root variant="primary" onClick={onOpenTarget}>
+              <Button.Icon>
+                <ShieldCheck size={14} />
+              </Button.Icon>
+              <Button.Label>{t("home-unlock-action")}</Button.Label>
+            </Button.Root>
+          }
+        >
+          {t("home-unlock-description")}
+        </Callout>
+      ) : !hasMods ? (
+        <Callout
+          variant="info"
+          title={t("home-ready-add-mods-title")}
+          action={
+            <Button.Root variant="primary" onClick={onOpenTarget}>
+              <Button.Icon>
+                <Puzzle size={14} />
+              </Button.Icon>
+              <Button.Label>{t("home-ready-manage")}</Button.Label>
+            </Button.Root>
+          }
+        >
+          {t("home-ready-add-mods-description")}{" "}
+          <button
+            type="button"
+            className="text-accent underline-offset-2 hover:underline"
+            onClick={() => openUrl(RML_WIKI_URL).catch(console.error)}
+          >
+            {t("nav-link-docs")}
+          </button>
+          {" · "}
+          <button
+            type="button"
+            className="text-accent underline-offset-2 hover:underline"
+            onClick={() => openUrl(RML_DISCORD_URL).catch(console.error)}
+          >
+            {t("nav-link-discord")}
+          </button>
+        </Callout>
+      ) : null}
+
+      {instances.length > 0 && (
+        <section className="flex flex-col gap-2.5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-dim">
+            {t("home-ready-section-setups")}
+          </h2>
+          <div className="flex flex-col gap-2">
+            {instances.map((instance) => (
+              <InstanceRow
+                key={instance.versionGuid}
+                instance={instance}
+                isLaunching={launchingId === instance.versionGuid}
+                onLaunch={() => onLaunch(instance.versionGuid)}
+                onConfigure={() => onConfigure(instance.versionGuid)}
+                t={t}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+interface InstanceRowProps {
+  instance: InstanceSummary;
+  isLaunching: boolean;
+  onLaunch: () => void;
+  onConfigure: () => void;
+  t: ReturnType<typeof useI18n>["t"];
+}
+
+function InstanceRow({ instance, isLaunching, onLaunch, onConfigure, t }: InstanceRowProps) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors duration-150 hover:border-[#2e2e2e] hover:bg-card-hover">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm icon-box--blue">
+        <Package size={17} />
       </div>
-
-      <div className="flex-1 flex flex-col justify-center px-7 py-6 gap-1.5">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.07, duration: 0.24 }}
-        >
-          <ActionButton
-            icon={<Play size={16} />}
-            iconClass="icon-box--blue"
-            label={t("home-action-launch-label")}
-            description={t("home-action-launch-description")}
-            onClick={() => {
-              void handleLaunch();
-            }}
-            disabled={isLaunching}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.11, duration: 0.24 }}
-        >
-          <ActionButton
-            icon={<Download size={16} />}
-            iconClass="icon-box--purple"
-            label={t("home-action-versions-label")}
-            description={t("home-action-versions-description")}
-            onClick={() => navigate({ to: "/settings/versions" })}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.24 }}
-        >
-          <ActionButton
-            icon={<Settings size={16} />}
-            iconClass="icon-box--gray"
-            label={t("home-action-settings-label")}
-            description={t("home-action-settings-description")}
-            onClick={() => navigate({ to: "/settings/instances" })}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.19, duration: 0.24 }}
-        >
-          <ActionButton
-            icon={<HelpCircle size={16} />}
-            iconClass="icon-box--orange"
-            label={t("home-action-help-label")}
-            description={t("home-action-help-description")}
-            onClick={() => handleLink(RML_WIKI_URL)}
-          />
-        </motion.div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">
+            {t("versions-studio-label", { version: instance.version })}
+          </span>
+          {instance.isDefault && (
+            <Badge.Root variant="yellow">
+              <Badge.Icon>
+                <Star size={9} />
+              </Badge.Icon>
+              <Badge.Label>{t("versions-badge-default")}</Badge.Label>
+            </Badge.Root>
+          )}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-text-muted">
+          {instance.modloader ? (
+            <span className="inline-flex items-center gap-1 text-green">
+              <ShieldCheck size={11} />
+              {instance.modloader.name}
+            </span>
+          ) : (
+            <span>{t("instances-no-loader")}</span>
+          )}
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1">
+            <Puzzle size={11} />
+            {t("instances-mods-count", {
+              enabled: instance.modsEnabled,
+              total: instance.modsTotal,
+            })}
+          </span>
+        </div>
       </div>
-    </motion.div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Button.Root variant="primary" size="sm" disabled={isLaunching} onClick={onLaunch}>
+          <Button.Icon>
+            {isLaunching ? (
+              <RefreshCw size={12} className="animate-spin" />
+            ) : (
+              <Play size={12} />
+            )}
+          </Button.Icon>
+          <Button.Label>{t("instances-launch")}</Button.Label>
+        </Button.Root>
+        <Button.Root
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("home-ready-configure")}
+          onClick={onConfigure}
+        >
+          <Button.Icon>
+            <Settings2 size={13} />
+          </Button.Icon>
+        </Button.Root>
+      </div>
+    </div>
   );
 }

@@ -1,13 +1,23 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { motion } from "motion/react";
-import { JSX } from "react";
+import { JSX, useEffect, useState } from "react";
 
+import { AboutSection } from "@/components/about-section";
 import SettingRow from "@/components/setting-row";
 import Toggle from "@/components/toggle";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { SegmentGroup } from "@/components/ui/segment-group";
+import { Select } from "@/components/ui/select";
 import { LOCALE_OPTIONS, useI18n } from "@/i18n";
+import { setEngineGeneralSettings } from "@/lib/engine";
+import { setStudioProtocolHandler } from "@/lib/protocol";
+import { queryKeys, useEngineGeneralSettings, useStudioProtocolStatus } from "@/lib/queries";
+import { createQuickLaunchShortcut } from "@/lib/startup";
+import { useSetupStore } from "@/stores/setup";
 import { useThemeStore } from "@/stores/theme";
 import { ACCENT_COLORS, type ThemeMode } from "@/theme/colors";
 
@@ -32,16 +42,76 @@ function AppearancePage() {
   const setCompactMode = useThemeStore((s) => s.setCompactMode);
   const setShowVersionBadge = useThemeStore((s) => s.setShowVersionBadge);
 
+  const queryClient = useQueryClient();
+  const { data: engineSettings } = useEngineGeneralSettings();
+  const [enableTracking, setEnableTracking] = useState<boolean | null>(null);
+  const [disableTelemetry, setDisableTelemetry] = useState<boolean | null>(null);
+  const [savingEngine, setSavingEngine] = useState(false);
+
+  useEffect(() => {
+    if (engineSettings) {
+      setEnableTracking(engineSettings.enableTracking);
+      setDisableTelemetry(engineSettings.disableTelemetry);
+    }
+  }, [engineSettings]);
+
+  const saveEngineSettings = async (nextTracking: boolean, nextTelemetry: boolean) => {
+    const previousTracking = enableTracking;
+    const previousTelemetry = disableTelemetry;
+    setEnableTracking(nextTracking);
+    setDisableTelemetry(nextTelemetry);
+    setSavingEngine(true);
+    try {
+      await setEngineGeneralSettings(nextTracking, nextTelemetry);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.engineGeneralSettings });
+    } catch (error) {
+      console.error(error);
+      setEnableTracking(previousTracking);
+      setDisableTelemetry(previousTelemetry);
+    } finally {
+      setSavingEngine(false);
+    }
+  };
+
+  const engineLoaded = enableTracking !== null && disableTelemetry !== null;
+
+  const { data: protocolStatus } = useStudioProtocolStatus();
+  const [protocolBusy, setProtocolBusy] = useState(false);
+
+  const toggleProtocol = async (enabled: boolean) => {
+    setProtocolBusy(true);
+    try {
+      const next = await setStudioProtocolHandler(enabled);
+      queryClient.setQueryData(queryKeys.studioProtocol, next);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setProtocolBusy(false);
+    }
+  };
+
+  const autoUpdateStudio = useSetupStore((s) => s.autoUpdateStudio);
+  const setAutoUpdateStudio = useSetupStore((s) => s.setAutoUpdateStudio);
+  const [shortcutState, setShortcutState] = useState<"idle" | "busy" | "done" | "error">("idle");
+
+  const createShortcut = async () => {
+    setShortcutState("busy");
+    try {
+      await createQuickLaunchShortcut();
+      setShortcutState("done");
+    } catch (error) {
+      console.error(error);
+      setShortcutState("error");
+    }
+  };
+
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-[18px] font-semibold text-text tracking-[-0.018em] leading-[1.25]">
-          {t("appearance-title")}
-        </h1>
-        <p className="text-[12.5px] text-text-muted mt-1 leading-normal">
-          {t("appearance-description")}
-        </p>
-      </div>
+      <PageHeader
+        className="mb-5"
+        title={t("appearance-title")}
+        description={t("appearance-description")}
+      />
 
       <Card.Root className="mb-3">
         <Card.Header>
@@ -107,17 +177,32 @@ function AppearancePage() {
           <Card.Description>{t("appearance-language-description")}</Card.Description>
         </Card.Header>
         <Card.Body>
-          <SegmentGroup.Root
+          <Select.Root
             value={preference}
-            onValueChange={(v) => setPreference(v as typeof preference)}
-            className="grid grid-cols-3"
+            onValueChange={(value) => setPreference(value as typeof preference)}
           >
-            {LOCALE_OPTIONS.map((option) => (
-              <SegmentGroup.Item key={option.value} value={option.value}>
-                {t(option.labelId)}
-              </SegmentGroup.Item>
-            ))}
-          </SegmentGroup.Root>
+            <Select.Trigger className="w-full sm:w-64" aria-label={t("appearance-section-language")}>
+              <Select.Value>
+                {(value) => {
+                  const option = LOCALE_OPTIONS.find((entry) => entry.value === value);
+                  return option ? t(option.labelId) : String(value ?? "");
+                }}
+              </Select.Value>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner>
+                <Select.Popup>
+                  <Select.List>
+                    {LOCALE_OPTIONS.map((option) => (
+                      <Select.Item key={option.value} value={option.value}>
+                        {t(option.labelId)}
+                      </Select.Item>
+                    ))}
+                  </Select.List>
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
         </Card.Body>
       </Card.Root>
 
@@ -138,6 +223,76 @@ function AppearancePage() {
           <Toggle checked={showVersionBadge} onChange={setShowVersionBadge} />
         </SettingRow>
       </Card.Root>
+
+      <Card.Root className="mt-3">
+        <Card.Header>
+          <Card.Label>{t("appearance-section-studio")}</Card.Label>
+          <Card.Description>{t("appearance-section-studio-description")}</Card.Description>
+        </Card.Header>
+        <SettingRow
+          label={t("engine-tracking-label")}
+          description={t("engine-tracking-description")}
+        >
+          <Toggle
+            checked={enableTracking ?? true}
+            disabled={!engineLoaded || savingEngine}
+            onChange={(checked) => void saveEngineSettings(checked, disableTelemetry ?? false)}
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("engine-telemetry-label")}
+          description={t("engine-telemetry-description")}
+        >
+          <Toggle
+            checked={disableTelemetry ?? false}
+            disabled={!engineLoaded || savingEngine}
+            onChange={(checked) => void saveEngineSettings(enableTracking ?? true, checked)}
+          />
+        </SettingRow>
+        {protocolStatus?.supported && (
+          <SettingRow
+            label={t("studio-protocol-label")}
+            description={t("studio-protocol-description")}
+          >
+            <Toggle
+              checked={protocolStatus.enabled}
+              disabled={protocolBusy}
+              onChange={(checked) => void toggleProtocol(checked)}
+            />
+          </SettingRow>
+        )}
+        <SettingRow
+          label={t("appearance-autoupdate-label")}
+          description={t("appearance-autoupdate-description")}
+        >
+          <Toggle checked={autoUpdateStudio} onChange={setAutoUpdateStudio} />
+        </SettingRow>
+        {protocolStatus?.supported && (
+          <SettingRow
+            label={t("appearance-shortcut-label")}
+            description={t("appearance-shortcut-description")}
+          >
+            <Button.Root
+              variant="ghost"
+              size="sm"
+              disabled={shortcutState === "busy"}
+              onClick={() => void createShortcut()}
+            >
+              <Button.Label>
+                {shortcutState === "done"
+                  ? t("appearance-shortcut-created")
+                  : shortcutState === "error"
+                    ? t("appearance-shortcut-error")
+                    : t("appearance-shortcut-create")}
+              </Button.Label>
+            </Button.Root>
+          </SettingRow>
+        )}
+      </Card.Root>
+
+      <div className="mt-3">
+        <AboutSection />
+      </div>
     </div>
   );
 }
