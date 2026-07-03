@@ -105,6 +105,8 @@ jobs:
                 `RML Launcher ${tag}.`,
                 "",
                 "Download the installer for your platform below — Windows (`.exe`/`.msi`), macOS (`.dmg`, universal) and Linux (`.AppImage`/`.deb`).",
+                "",
+                "Prefer no installer? Windows also ships a portable `*-portable.exe` you can run directly.",
               ].join("\n"),
               draft: true,
               prerelease: process.env.PRERELEASE === "true",
@@ -173,6 +175,27 @@ jobs:
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           args: ${{ matrix.args }}
+          
+      - name: Attach portable Windows executable
+        if: matrix.platform == 'windows-latest'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        with:
+          script: |
+            const fs = require("fs");
+            const source = "src-tauri/target/release/rml-launcher.exe";
+            const name = `RML-Launcher_${process.env.VERSION}_x64-portable.exe`;
+            const data = fs.readFileSync(source);
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              name,
+              data,
+            });
+            core.info(`Attached ${name} (${(data.length / 1048576).toFixed(1)} MiB)`);
 
   publish:
     name: Publish release
