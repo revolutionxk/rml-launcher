@@ -148,3 +148,18 @@ pub struct EngineStateResponse {
     pub available_targets: Vec<EngineTargetVersionEntry>,
     pub scan: EngineScanInfo,
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_engine_target_keyed_by_version_guid_still_loads() {
+        let preferences: EnginePreferences =
+            serde_json::from_str(r#"{"selectedTargetVersionGuid":"version-abc123"}"#).unwrap();
+
+        assert_eq!(
+            preferences.selected_target_installation_id.as_deref(),
+            Some("version-abc123")
+        );
+    }
+}

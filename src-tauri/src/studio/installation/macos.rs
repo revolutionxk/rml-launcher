@@ -198,28 +198,3 @@ mod tests {
         fs::remove_dir_all(&root).ok();
     }
 }
-
-#[cfg(test)]
-mod live {
-    use super::*;
-
-    #[test]
-    #[ignore]
-    fn finds_the_studio_installed_on_this_machine() {
-        let found = MacBundleProvider
-            .discover(&Paths::for_test(std::env::temp_dir()))
-            .unwrap();
-
-        for installation in &found {
-            println!(
-                "{} version={:?} dir={} caps_mods={}",
-                installation.id.as_str(),
-                installation.version,
-                installation.install_dir.display(),
-                installation.capabilities.contains(Capabilities::MODS)
-            );
-        }
-
-        assert!(!found.is_empty());
-    }
-}

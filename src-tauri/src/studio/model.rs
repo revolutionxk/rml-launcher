@@ -153,3 +153,59 @@ pub struct StudioInstallProgress {
     pub progress: f64,
     pub error: Option<String>,
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_preferences_keyed_by_version_guid_still_load() {
+        let preferences: StudioPreferences =
+            serde_json::from_str(r#"{"defaultVersionGuid":"version-abc123"}"#).unwrap();
+
+        assert_eq!(
+            preferences.default_installation_id.as_deref(),
+            Some("version-abc123")
+        );
+    }
+
+    #[test]
+    fn preferences_are_written_back_under_the_new_key() {
+        let preferences = StudioPreferences {
+            default_installation_id: Some("managed:version-abc123".into()),
+        };
+
+        let json = serde_json::to_string(&preferences).unwrap();
+
+        assert_eq!(json, r#"{"defaultInstallationId":"managed:version-abc123"}"#);
+    }
+
+    #[test]
+    fn the_serialized_shape_matches_the_frontend_contract() {
+        let installation = StudioInstallation::new(
+            InstallationSource::Bloxstrap,
+            "version-abc123",
+            std::path::PathBuf::from("/root/version-abc123"),
+            std::path::PathBuf::from("/root/version-abc123/RobloxStudioBeta.exe"),
+        );
+
+        let json = serde_json::to_value(StudioVersionEntry::from_installation(&installation)).unwrap();
+
+        assert_eq!(json["id"], "bloxstrap:version-abc123");
+        assert_eq!(json["source"], "bloxstrap");
+        assert_eq!(json["capabilities"], 0b0000_0111);
+        assert_eq!(json["isInstalled"], true);
+    }
+
+    #[test]
+    fn remote_entries_are_namespaced_so_they_never_collide_with_installations() {
+        let entry = StudioVersionEntry::available(
+            "version-abc123".into(),
+            "0.730.0".into(),
+            "LIVE",
+            None,
+        );
+
+        assert_eq!(entry.id, "remote:version-abc123");
+        assert!(!entry.is_installed);
+    }
+}
