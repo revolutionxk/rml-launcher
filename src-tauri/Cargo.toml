@@ -38,6 +38,7 @@ anyhow = { workspace = true }
 chrono = { version = "0.4.42", features = ["clock", "serde"] }
 futures-util = "0.3.31"
 md-5 = "0.10.6"
+plist = "1.7"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"] }
 rml-flag-scanner = { path = "crates/rml-flag-scanner" }
 sha2 = "0.10.9"
@@ -51,4 +52,7 @@ zip = "2.4.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
 

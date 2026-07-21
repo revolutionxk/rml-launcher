@@ -90,6 +90,13 @@ fn into_asset(asset: GithubAsset) -> ModLoaderAsset {
     }
 }
 
+#[cfg(target_os = "windows")]
+const PLATFORM_ASSET_KEYWORDS: &[&str] = &["windows"];
+#[cfg(target_os = "macos")]
+const PLATFORM_ASSET_KEYWORDS: &[&str] = &["macos", "darwin", "osx"];
+#[cfg(target_os = "linux")]
+const PLATFORM_ASSET_KEYWORDS: &[&str] = &["linux"];
+
 fn resolve_bundle_asset(assets: &[GithubAsset]) -> Option<GithubAsset> {
     let zips = assets
         .iter()
@@ -97,7 +104,10 @@ fn resolve_bundle_asset(assets: &[GithubAsset]) -> Option<GithubAsset> {
         .collect::<Vec<_>>();
 
     zips.iter()
-        .find(|asset| asset.name.to_ascii_lowercase().contains("windows"))
+        .find(|asset| {
+            let name = asset.name.to_ascii_lowercase();
+            PLATFORM_ASSET_KEYWORDS.iter().any(|keyword| name.contains(keyword))
+        })
         .or_else(|| {
             zips.iter()
                 .filter(|asset| !asset.name.to_ascii_lowercase().contains("managed-runtime"))
@@ -201,7 +211,7 @@ pub fn ensure_trusted_download(url: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_sha256, resolve_bundle_asset};
+    use super::{parse_sha256, resolve_bundle_asset, PLATFORM_ASSET_KEYWORDS};
     use crate::modloader::model::GithubAsset;
 
     fn asset(name: &str, size: u64) -> GithubAsset {
@@ -215,15 +225,17 @@ mod tests {
     }
 
     #[test]
-    fn prefers_windows_bundle() {
+    fn prefers_the_host_platform_bundle() {
+        let platform_zip = format!("nightly-{}.zip", PLATFORM_ASSET_KEYWORDS[0]);
         let assets = vec![
             asset("managed-runtime.zip", 700_000),
-            asset("nightly-windows.zip", 1_700_000),
-            asset("roblox_modloader.dll", 4_000_000),
+            asset(&platform_zip, 1_700_000),
+            asset("nightly-someotheros.zip", 9_000_000),
+            asset("roblox_modloader.bin", 4_000_000),
         ];
 
         let resolved = resolve_bundle_asset(&assets).expect("a bundle should resolve");
-        assert_eq!(resolved.name, "nightly-windows.zip");
+        assert_eq!(resolved.name, platform_zip);
     }
 
     #[test]

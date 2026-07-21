@@ -17,8 +17,8 @@ export function PlatformNotice() {
 
   const [busy, setBusy] = useState<"install" | "launch" | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  if (!host || host.os === "windows") {
+  
+  if (!host || host.os !== "linux") {
     return null;
   }
 
@@ -50,12 +50,9 @@ export function PlatformNotice() {
     }
   };
 
-  const message =
-    host.os === "macos"
-      ? t("platform-notice-macos")
-      : vinegar?.installed
-        ? t("platform-notice-linux-vinegar")
-        : t("platform-notice-linux-no-vinegar");
+  const message = vinegar?.installed
+    ? t("platform-notice-linux-vinegar")
+    : t("platform-notice-linux-no-vinegar");
 
   return (
     <div className="mb-4 shrink-0 rounded-sm border border-yellow/25 bg-yellow-muted px-4 py-3">

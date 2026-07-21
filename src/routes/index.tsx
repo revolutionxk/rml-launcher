@@ -59,7 +59,6 @@ function HomePage() {
   const setupUsable = hasStudio && (hasLoader || loaderDeferred);
 
   const isLinux = host?.os === "linux";
-  const isWindows = !host || host.os === "windows";
 
   const handleLaunch = async (versionGuid: string) => {
     setLaunchingId(versionGuid);
@@ -160,26 +159,24 @@ function HomePage() {
 
         {isLoading ? (
           <LoadingState label={t("home-loading")} />
-        ) : !isWindows ? (
-          isLinux ? (
-            <Callout
-              variant="info"
-              title={t("vinegar-studio-title")}
-              action={
-                <Button.Root
-                  variant="primary"
-                  onClick={() => navigate({ to: "/settings/instances" })}
-                >
-                  <Button.Label>{t("nav-studios")}</Button.Label>
-                  <Button.Icon>
-                    <ArrowRight size={14} />
-                  </Button.Icon>
-                </Button.Root>
-              }
-            >
-              {t("vinegar-studio-description")}
-            </Callout>
-          ) : null
+        ) : isLinux ? (
+          <Callout
+            variant="info"
+            title={t("vinegar-studio-title")}
+            action={
+              <Button.Root
+                variant="primary"
+                onClick={() => navigate({ to: "/settings/instances" })}
+              >
+                <Button.Label>{t("nav-studios")}</Button.Label>
+                <Button.Icon>
+                  <ArrowRight size={14} />
+                </Button.Icon>
+              </Button.Root>
+            }
+          >
+            {t("vinegar-studio-description")}
+          </Callout>
         ) : setupUsable && target ? (
           <ReadyDashboard
             target={target}

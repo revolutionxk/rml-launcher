@@ -1,3 +1,4 @@
+mod activation;
 mod api;
 mod installer;
 mod model;
@@ -13,6 +14,7 @@ use tracing::info;
 use crate::{studio::installed_studio_target, AppError, CommandResult, Paths};
 
 use self::{
+    activation::{activation, ActivationContext},
     installer::{install_release, remove_from_install_dir, InstallProgressSink, INSTALL_EVENT},
     model::ModLoaderInstallProgress,
     paths::release_cache_dir,
@@ -72,7 +74,7 @@ pub async fn install_modloader(
     let sink = EventSink { app: &app };
     let manifest = install_release(&sink, cache_dir, &release, &version_guid, &install_dir).await?;
 
-    set_vinegar_dwmapi_override(&version_guid, true);
+    activate_loader(&version_guid, &install_dir).await?;
 
     Ok(manifest)
 }
@@ -94,10 +96,10 @@ pub async fn uninstall_modloader(
         return Ok(());
     };
 
+    deactivate_loader(&version_guid, &install_dir).await?;
+
     remove_from_install_dir(&install_dir, &manifest.artifacts).await?;
     remove_manifest(&install_dir).await?;
-
-    set_vinegar_dwmapi_override(&version_guid, false);
 
     info!(version_guid, tag = %manifest.tag, "mod loader uninstalled from Studio version");
 
@@ -108,13 +110,35 @@ pub(crate) fn installed_manifest(install_dir: &Path) -> Option<ModLoaderInstalle
     load_manifest(install_dir).ok().flatten()
 }
 
-fn set_vinegar_dwmapi_override(version_guid: &str, enabled: bool) {
-    #[cfg(target_os = "linux")]
-    if version_guid == crate::vinegar::INSTANCE_ID {
-        if let Err(error) = crate::vinegar::set_dwmapi_override(enabled) {
-            tracing::warn!(error = %error, "failed to update the Vinegar dwmapi override");
-        }
-    }
+async fn activate_loader(version_guid: &str, install_dir: &Path) -> Result<(), AppError> {
+    run_activation(version_guid, install_dir, Activation::Activate).await
+}
 
-    let _ = (version_guid, enabled);
+async fn deactivate_loader(version_guid: &str, install_dir: &Path) -> Result<(), AppError> {
+    run_activation(version_guid, install_dir, Activation::Deactivate).await
+}
+
+enum Activation {
+    Activate,
+    Deactivate,
+}
+
+async fn run_activation(version_guid: &str, install_dir: &Path, action: Activation) -> Result<(), AppError> {
+    let version_guid = version_guid.to_string();
+    let install_dir = install_dir.to_path_buf();
+
+    tokio::task::spawn_blocking(move || {
+        let backend = activation();
+        let context = ActivationContext {
+            version_guid: &version_guid,
+            install_dir: &install_dir,
+        };
+
+        match action {
+            Activation::Activate => backend.activate(&context),
+            Activation::Deactivate => backend.deactivate(&context),
+        }
+    })
+    .await?
+    .map_err(AppError::from)
 }

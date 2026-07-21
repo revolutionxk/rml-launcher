@@ -1,5 +1,6 @@
 #[cfg(windows)]
 use std::process::Command;
+use std::sync::Mutex;
 
 use anyhow::Result;
 use serde::Serialize;
@@ -14,6 +15,19 @@ fn bootstrap_flag_present<I: IntoIterator<Item = String>>(args: I) -> bool {
     args.into_iter().any(|arg| arg == BOOTSTRAP_FLAG)
 }
 
+#[derive(Default)]
+pub struct PendingDeepLink(Mutex<Option<String>>);
+
+impl PendingDeepLink {
+    fn store(&self, uri: String) {
+        *self.0.lock().expect("pending deep link mutex poisoned") = Some(uri);
+    }
+
+    fn take(&self) -> Option<String> {
+        self.0.lock().expect("pending deep link mutex poisoned").take()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartupOptions {
@@ -22,14 +36,31 @@ pub struct StartupOptions {
 }
 
 #[tauri::command]
-pub fn get_startup_options() -> StartupOptions {
+pub fn get_startup_options(app: AppHandle) -> StartupOptions {
     let args: Vec<String> = std::env::args().collect();
-    let studio_uri = crate::protocol::studio_uri_from_args(args.iter().cloned());
+    let studio_uri = crate::protocol::studio_uri_from_args(args.iter().cloned())
+        .or_else(|| app.state::<PendingDeepLink>().take());
 
     StartupOptions {
         bootstrap: bootstrap_flag_present(args) || studio_uri.is_some(),
         studio_uri,
     }
+}
+
+#[cfg(target_os = "macos")]
+pub fn handle_deep_link<I: IntoIterator<Item = String>>(app: &AppHandle, urls: I) {
+    let Some(uri) = crate::protocol::studio_uri_from_args(urls) else {
+        return;
+    };
+
+    app.state::<PendingDeepLink>().store(uri.clone());
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+
+    let _ = app.emit(BOOTSTRAP_REQUEST_EVENT, BootstrapRequest { uri: Some(uri) });
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -36,6 +36,7 @@ pub fn run() {
         })
         .manage(studio::StudioState::default())
         .manage(modloader::ModLoaderState::default())
+        .manage(startup::PendingDeepLink::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -74,8 +75,14 @@ pub fn run() {
             vinegar::install_vinegar,
             vinegar::launch_vinegar,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app_handle, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &_event {
+                startup::handle_deep_link(_app_handle, urls.iter().map(|url| url.to_string()));
+            }
+        });
 }
 
 #[cfg(target_os = "linux")]

@@ -8,10 +8,9 @@ const titlebarBase =
 const titleText = "text-[12px] font-medium text-text-dim tracking-[0.01em] flex items-center gap-1";
 
 export default function TitleBar() {
-  if (__PLATFORM__ === "macos") {
+  if (__PLATFORM__ === "darwin") {
     return (
-      <div className={`${titlebarBase} pl-2.5`} data-tauri-drag-region>
-        <WindowControls />
+      <div className={`${titlebarBase} pl-20`} data-tauri-drag-region>
         <span className={`${titleText} absolute left-1/2 -translate-x-1/2`} data-tauri-drag-region>
           {APP_NAME}
         </span>

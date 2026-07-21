@@ -1,35 +1,47 @@
 mod api;
 mod config;
+mod deployment;
+mod launch;
+mod progress;
 pub(crate) mod engine;
+#[cfg(not(target_os = "macos"))]
 mod installer;
 mod model;
 mod paths;
 mod storage;
 
 use std::path::PathBuf;
-use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter, State};
 use tokio::{fs as tokio_fs, sync::Mutex};
-use tracing::{info, warn};
+use tracing::info;
+#[cfg(not(target_os = "macos"))]
+use tracing::warn;
 
 use crate::{AppError, CommandResult, Paths};
 
 use self::{
     config::{CURRENT_CHANNEL, STUDIO_INSTALL_EVENT},
     engine::apply_saved_preferences_to_install_dir,
-    installer::{install_version, revalidate_version, StudioProgressSink},
+    deployment::{active_deployment, StudioDeployment},
+    launch::{active_launcher, StudioLauncher},
+    progress::StudioProgressSink,
     model::{StudioBuild, StudioInstallProgress, StudioVersionsResponse},
     paths::{
-        downloads_dir, version_download_dir, version_executable_path, version_install_dir,
-        version_launcher_path, version_manifest_path,
+        version_download_dir, version_executable_path, version_install_dir, version_manifest_path,
     },
     storage::{
         discover_installed_versions, load_studio_preferences, read_installed_manifest,
         save_studio_preferences,
     },
 };
+
+#[cfg(not(target_os = "macos"))]
+use self::installer::revalidate_version;
+
+#[cfg(not(target_os = "macos"))]
+use self::paths::downloads_dir;
 
 pub(crate) use self::model::StudioVersionEntry;
 
@@ -184,12 +196,6 @@ pub async fn launch_studio(
 }
 
 async fn launch_studio_inner(app: &AppHandle, version_guid: &str, uri: Option<&str>) -> Result<()> {
-    if !cfg!(target_os = "windows") {
-        bail!(
-            "Launching Studio directly is only available on Windows. On Linux, run Studio through Vinegar."
-        );
-    }
-
     let paths = Paths::resolve(app)?;
     let install_dir = version_install_dir(&paths, version_guid);
     let manifest_path = version_manifest_path(&install_dir);
@@ -200,37 +206,11 @@ async fn launch_studio_inner(app: &AppHandle, version_guid: &str, uri: Option<&s
 
     read_installed_manifest(&manifest_path)?;
     apply_saved_preferences_to_install_dir(&paths, &install_dir).await?;
-    spawn_studio(install_dir, uri).await
-}
-
-async fn spawn_studio(install_dir: PathBuf, uri: Option<&str>) -> Result<()> {
-    let launcher = version_launcher_path(&install_dir);
-    let executable = version_executable_path(&install_dir);
-    let program = if uri.is_some() && launcher.exists() {
-        launcher
-    } else {
-        executable
-    };
-
-    if !program.exists() {
-        bail!("Studio was not found in {}", install_dir.display());
-    }
 
     let uri = uri.map(str::to_string);
-    tokio::task::spawn_blocking(move || -> Result<()> {
-        let mut command = Command::new(&program);
-        command.current_dir(&install_dir);
-        if let Some(uri) = &uri {
-            command.arg(uri);
-        }
-        command
-            .spawn()
-            .with_context(|| format!("failed to launch {}", program.display()))?;
-
-        Ok(())
-    })
-    .await
-    .context("the Studio launch task failed to join")?
+    tokio::task::spawn_blocking(move || active_launcher().launch(&install_dir, uri.as_deref()))
+        .await
+        .context("the Studio launch task failed to join")?
 }
 
 #[tauri::command]
@@ -243,6 +223,16 @@ pub async fn revalidate_studio_version(
         AppError::Failed("Cannot revalidate Studio while another installation is running.".into())
     })?;
 
+    #[cfg(target_os = "macos")]
+    {
+        let _ = (&app, &version_guid);
+        return Err(AppError::unsupported(
+            "Revalidation is not available for macOS Studio yet.",
+        ));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
     let paths = Paths::resolve(&app)?;
     let install_dir = version_install_dir(&paths, &version_guid);
     let downloads_root = downloads_dir(&paths);
@@ -262,6 +252,7 @@ pub async fn revalidate_studio_version(
     }
 
     Ok(entry)
+    }
 }
 
 #[tauri::command]
@@ -377,16 +368,17 @@ async fn install_studio_version_inner(
     let paths = Paths::resolve(app)?;
     let install_dir = version_install_dir(&paths, version_guid);
     let download_dir = version_download_dir(&paths, version_guid);
-    let manifest = install_version(
-        &EventSink { app },
-        install_dir,
-        download_dir,
-        version_guid,
-        version,
-        channel,
-        published_at,
-    )
-    .await?;
+    let manifest = active_deployment()
+        .install(
+            &EventSink { app },
+            install_dir,
+            download_dir,
+            version_guid,
+            version,
+            channel,
+            published_at,
+        )
+        .await?;
     let install_dir = version_install_dir(&paths, &manifest.version_guid);
     let executable_path = version_executable_path(&install_dir);
 

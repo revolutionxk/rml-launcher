@@ -41,7 +41,7 @@ export default defineConfig(async () => ({
     },
   },
   define: {
-    __PLATFORM__: JSON.stringify(process.env.__TAURI_PLATFORM__ || "windows"),
+    __PLATFORM__: JSON.stringify(process.env.TAURI_ENV_PLATFORM ?? process.platform),
     __APP_GIT_HASH__: JSON.stringify(getGitHash()),
   },
 }));

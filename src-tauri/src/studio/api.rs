@@ -2,16 +2,20 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
+#[cfg(not(target_os = "macos"))]
+use anyhow::bail;
 use chrono::NaiveDateTime;
 use reqwest::Client;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
 use super::{
-    config::{binary_target, deploy_history_product},
-    model::{CurrentVersionResponse, PackageManifestEntry, StudioBuild},
+    config::{binary_target, deploy_history_product, mac_studio_blob_dir, MAC_STUDIO_ZIP},
+    model::{CurrentVersionResponse, StudioBuild},
 };
+#[cfg(not(target_os = "macos"))]
+use super::model::PackageManifestEntry;
 
 const SETUP_BASE_URLS: &[&str] = &["https://setup.rbxcdn.com"];
 const CLIENT_SETTINGS_BASE_URL: &str = "https://clientsettingscdn.roblox.com/v2/client-version";
@@ -49,6 +53,7 @@ pub async fn fetch_current_version(channel: &str) -> Result<CurrentVersionRespon
     Ok(response)
 }
 
+#[cfg(not(target_os = "macos"))]
 pub async fn fetch_package_manifest(version_guid: &str) -> Result<Vec<PackageManifestEntry>> {
     let normalized_version_guid = normalize_version_guid(version_guid);
     let manifest_candidates = [
@@ -85,10 +90,21 @@ pub async fn fetch_build_history() -> Result<Vec<StudioBuild>> {
     Ok(parse_deploy_history(&data, deploy_history_product()))
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn package_url(version_guid: &str, package_name: &str) -> String {
     let normalized_version_guid = normalize_version_guid(version_guid);
 
     format!("{}/{normalized_version_guid}-{package_name}", SETUP_BASE_URLS[0])
+}
+
+pub fn mac_studio_url(version_guid: &str) -> String {
+    let normalized_version_guid = normalize_version_guid(version_guid);
+
+    format!(
+        "{}{}{normalized_version_guid}-{MAC_STUDIO_ZIP}",
+        SETUP_BASE_URLS[0],
+        mac_studio_blob_dir(),
+    )
 }
 
 pub(super) fn same_version_guid(left: &str, right: &str) -> bool {
@@ -209,6 +225,7 @@ fn normalize_version_guid(version_guid: &str) -> String {
     format!("{VERSION_GUID_PREFIX}{trimmed}")
 }
 
+#[cfg(not(target_os = "macos"))]
 fn parse_package_manifest(data: &str) -> Result<Vec<PackageManifestEntry>> {
     let mut lines = data.lines();
     let manifest_version = lines.next().unwrap_or_default();
@@ -326,8 +343,22 @@ fn normalize_file_version(raw: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_version_guid, parse_deploy_history, parse_package_manifest, same_version_guid};
+    use super::{mac_studio_url, normalize_version_guid, parse_deploy_history, same_version_guid};
+    #[cfg(not(target_os = "macos"))]
+    use super::parse_package_manifest;
 
+    #[test]
+    fn builds_the_mac_studio_download_url() {
+        let url = mac_studio_url("abc123");
+
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(url, "https://setup.rbxcdn.com/mac/arm64/version-abc123-RobloxStudioApp.zip");
+        #[cfg(not(target_arch = "aarch64"))]
+        assert_eq!(url, "https://setup.rbxcdn.com/mac/version-abc123-RobloxStudioApp.zip");
+    }
+
+
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn parses_package_manifest() {
         let manifest = parse_package_manifest(

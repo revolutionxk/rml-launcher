@@ -14,7 +14,8 @@ export function useStudioAutoSetup() {
   const markAutoSetupDone = useSetupStore((state) => state.markAutoSetupDone);
 
   useEffect(() => {
-    if (autoSetupDone || host?.os !== "windows") {
+    const supportsAutoSetup = host?.os === "windows" || host?.os === "macos";
+    if (autoSetupDone || !supportsAutoSetup) {
       return;
     }
     if (!instances?.some((instance) => instance.executablePath)) {
@@ -27,7 +28,9 @@ export function useStudioAutoSetup() {
       try {
         const status = await setStudioProtocolHandler(true);
         queryClient.setQueryData(queryKeys.studioProtocol, status);
-        void createQuickLaunchShortcut().catch(console.error);
+        if (host?.os === "windows") {
+          void createQuickLaunchShortcut().catch(console.error);
+        }
         if (!cancelled) {
           markAutoSetupDone();
         }

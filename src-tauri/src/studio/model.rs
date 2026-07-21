@@ -9,6 +9,7 @@ pub struct CurrentVersionResponse {
     pub client_version_upload: String,
 }
 
+#[cfg(not(target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub struct PackageManifestEntry {
     pub name: String,

@@ -1,8 +1,10 @@
 pub const CURRENT_CHANNEL: &str = "LIVE";
 pub const STUDIO_INSTALL_EVENT: &str = "studio-install-progress";
 
+#[cfg(not(target_os = "macos"))]
 pub const APP_SETTINGS_XML: &str = include_str!("../../resources/app_settings.xml");
 
+#[cfg(not(target_os = "macos"))]
 pub const OAUTH2_CONFIG_JSON: &str = include_str!("../../resources/OAuth2Config.json");
 
 pub fn binary_target() -> &'static str {
@@ -25,6 +27,17 @@ pub fn deploy_history_product() -> &'static str {
     }
 }
 
+pub const MAC_STUDIO_ZIP: &str = "RobloxStudioApp.zip";
+
+pub fn mac_studio_blob_dir() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "/mac/arm64/"
+    } else {
+        "/mac/"
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
 pub fn package_extract_root(package_stem: &str, version_major: u32) -> &'static str {
     match package_stem {
         "ApplicationConfig" if version_major >= 532 => "ApplicationConfig",
@@ -60,7 +73,7 @@ pub fn package_extract_root(package_stem: &str, version_major: u32) -> &'static 
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "macos")))]
 mod tests {
     use super::package_extract_root;
 
