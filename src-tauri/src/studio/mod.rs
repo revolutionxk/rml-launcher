@@ -4,6 +4,7 @@ mod deployment;
 mod launch;
 mod progress;
 pub(crate) mod engine;
+pub(crate) mod installation;
 #[cfg(not(target_os = "macos"))]
 mod installer;
 mod model;
