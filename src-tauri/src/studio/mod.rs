@@ -8,8 +8,8 @@ pub(crate) mod installation;
 #[cfg(not(target_os = "macos"))]
 mod installer;
 mod model;
-mod paths;
-mod storage;
+pub(crate) mod paths;
+pub(crate) mod storage;
 
 use std::path::PathBuf;
 

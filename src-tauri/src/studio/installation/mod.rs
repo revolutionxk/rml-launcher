@@ -1,3 +1,4 @@
+mod managed;
 mod model;
 
 use std::collections::HashSet;
@@ -7,6 +8,7 @@ use tracing::warn;
 
 use crate::Paths;
 
+pub(crate) use managed::ManagedProvider;
 pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
 
 pub(crate) trait InstallationProvider: Send + Sync {
