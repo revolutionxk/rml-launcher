@@ -1,6 +1,7 @@
 mod macos;
 mod managed;
 mod model;
+mod vinegar;
 mod windows;
 
 use std::collections::HashSet;
@@ -13,6 +14,7 @@ use crate::Paths;
 pub(crate) use macos::MacBundleProvider;
 pub(crate) use managed::ManagedProvider;
 pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
+pub(crate) use vinegar::VinegarProvider;
 pub(crate) use windows::WindowsProvider;
 
 pub(crate) trait InstallationProvider: Send + Sync {
