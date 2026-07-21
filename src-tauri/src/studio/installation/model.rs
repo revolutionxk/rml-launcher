@@ -31,6 +31,7 @@ impl fmt::Display for InstallationId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(not(test), allow(dead_code))]
 pub enum InstallationSource {
     Managed,
     RobloxOfficial,
@@ -68,10 +69,6 @@ impl Capabilities {
     pub fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
     }
-
-    pub fn remove(self, other: Self) -> Self {
-        Self(self.0 & !other.0)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +79,10 @@ pub struct StudioInstallation {
     pub executable: PathBuf,
     pub version: Option<String>,
     pub version_guid: Option<String>,
+    pub channel: Option<String>,
     pub installed_at: Option<String>,
+    pub published_at: Option<String>,
+    pub integrity_verified_at: Option<String>,
     pub capabilities: Capabilities,
 }
 
@@ -100,7 +100,10 @@ impl StudioInstallation {
             executable,
             version: None,
             version_guid: None,
+            channel: None,
             installed_at: None,
+            published_at: None,
+            integrity_verified_at: None,
             capabilities: Capabilities::DETECTED,
         }
     }
@@ -137,13 +140,5 @@ mod tests {
         assert!(!Capabilities::DETECTED.contains(Capabilities::REVALIDATE));
         assert!(Capabilities::DETECTED.contains(Capabilities::LAUNCH));
         assert!(Capabilities::MANAGED.contains(Capabilities::UNINSTALL));
-    }
-
-    #[test]
-    fn removing_a_capability_leaves_the_others() {
-        let reduced = Capabilities::DETECTED.remove(Capabilities::MODS);
-
-        assert!(!reduced.contains(Capabilities::MODS));
-        assert!(reduced.contains(Capabilities::LAUNCH));
     }
 }

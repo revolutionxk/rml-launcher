@@ -1,3 +1,5 @@
+#![cfg_attr(not(target_os = "windows"), allow(dead_code))]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -9,7 +11,6 @@ use super::{Capabilities, InstallationProvider, InstallationSource, StudioInstal
 
 const STUDIO_EXECUTABLE: &str = "RobloxStudioBeta.exe";
 
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) struct WindowsProvider;
 
 impl InstallationProvider for WindowsProvider {

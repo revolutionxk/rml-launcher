@@ -58,8 +58,12 @@ impl Default for EngineVersionPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EnginePreferences {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selected_target_version_guid: Option<String>,
+    #[serde(
+        default,
+        alias = "selectedTargetVersionGuid",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub selected_target_installation_id: Option<String>,
     #[serde(default)]
     pub default_profile: EngineVersionPreferences,
     #[serde(default)]
@@ -117,7 +121,7 @@ pub enum EngineScanSource {
 pub struct EngineScanInfo {
     pub can_pattern_scan: bool,
     pub source: EngineScanSource,
-    pub target_version_guid: Option<String>,
+    pub target_installation_id: Option<String>,
     pub target_version: Option<String>,
     pub last_scanned_version_guid: Option<String>,
     pub last_scanned_at: Option<String>,
@@ -127,7 +131,7 @@ pub struct EngineScanInfo {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineTargetVersionEntry {
-    pub version_guid: String,
+    pub id: String,
     pub version: String,
     pub is_default: bool,
 }
@@ -140,7 +144,7 @@ pub struct EngineStateResponse {
     pub override_count: usize,
     pub enable_tracking: bool,
     pub disable_telemetry: bool,
-    pub selected_target_version_guid: Option<String>,
+    pub selected_target_installation_id: Option<String>,
     pub available_targets: Vec<EngineTargetVersionEntry>,
     pub scan: EngineScanInfo,
 }

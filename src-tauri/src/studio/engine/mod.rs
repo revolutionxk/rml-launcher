@@ -5,7 +5,7 @@ mod storage;
 
 use std::{
     collections::BTreeMap,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use anyhow::{bail, Context, Result};
@@ -18,9 +18,8 @@ use tokio::fs as tokio_fs;
 use crate::{AppError, CommandResult, Paths};
 
 use super::{
-    api::same_version_guid,
-    paths::version_manifest_path,
-    storage::{discover_installed_versions, load_studio_preferences, read_installed_manifest},
+    installation::{self, Capabilities, StudioInstallation},
+    storage::load_studio_preferences,
 };
 
 use self::{
@@ -42,15 +41,6 @@ const REMOTE_CLIENT_SETTINGS_URL: &str =
 #[serde(rename_all = "camelCase")]
 struct RemoteClientSettingsResponse {
     application_settings: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone)]
-struct InstalledTarget {
-    version_guid: String,
-    version: String,
-    install_dir: PathBuf,
-    executable_path: PathBuf,
-    is_default: bool,
 }
 
 #[derive(Debug)]
@@ -75,22 +65,22 @@ pub async fn rescan_engine_flags(app: AppHandle) -> CommandResult<EngineStateRes
 #[tauri::command]
 pub async fn set_engine_target_version(
     app: AppHandle,
-    version_guid: Option<String>,
+    installation_id: Option<String>,
 ) -> CommandResult<EngineStateResponse> {
     let paths = Paths::resolve(&app)?;
     let mut preferences = load_preferences(&paths)?;
 
-    preferences.selected_target_version_guid = match version_guid {
-        Some(version_guid) => {
+    preferences.selected_target_installation_id = match installation_id {
+        Some(installation_id) => {
             let installed_targets = resolve_installed_targets(&paths)?;
             let target = installed_targets
                 .into_iter()
-                .find(|target| same_version_guid(&target.version_guid, &version_guid))
+                .find(|target| target.id.as_str() == installation_id)
                 .ok_or_else(|| {
                     AppError::Failed("The selected Studio engine target is not installed.".into())
                 })?;
 
-            Some(target.version_guid)
+            Some(target.id.to_string())
         }
         None => None,
     };
@@ -210,8 +200,8 @@ pub(crate) async fn apply_saved_preferences_to_install_dir(
     install_dir: &Path,
 ) -> Result<()> {
     let preferences = load_preferences(paths)?;
-    let target_version_guid = read_target_version_guid_from_install_dir(install_dir)?;
-    let profile = active_profile(&preferences, Some(&target_version_guid));
+    let target_id = installation_id_for_install_dir(paths, install_dir);
+    let profile = active_profile(&preferences, target_id.as_deref());
 
     apply_preferences_to_install_dir(install_dir, profile).await
 }
@@ -220,16 +210,17 @@ async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineS
     let preferences = load_preferences(paths)?;
     let remote_defaults = fetch_remote_defaults().await.unwrap_or_default();
     let installed_targets = resolve_installed_targets(paths)?;
-    let target = resolve_target_version(&preferences, &installed_targets);
-    let active_profile = active_profile(&preferences, target.as_ref().map(|entry| entry.version_guid.as_str()));
-    let selected_target_version_guid = preferences.selected_target_version_guid.as_ref().and_then(
-        |selected_target_guid| {
+    let target = resolve_target_version(paths, &preferences, &installed_targets);
+    let active_profile = active_profile(&preferences, target.as_ref().map(|entry| entry.id.as_str()));
+    let selected_target_installation_id = preferences
+        .selected_target_installation_id
+        .as_ref()
+        .and_then(|selected_id| {
             installed_targets
                 .iter()
-                .find(|target| same_version_guid(&target.version_guid, selected_target_guid))
-                .map(|target| target.version_guid.clone())
-        },
-    );
+                .find(|target| target.id.as_str() == selected_id)
+                .map(|target| target.id.to_string())
+        });
     let mut warning = None;
     let mut scan_source = if remote_defaults.is_empty() {
         EngineScanSource::Unavailable
@@ -268,9 +259,9 @@ async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineS
     let available_targets = installed_targets
         .iter()
         .map(|target_entry| EngineTargetVersionEntry {
-            version_guid: target_entry.version_guid.clone(),
-            version: target_entry.version.clone(),
-            is_default: target_entry.is_default,
+            id: target_entry.id.to_string(),
+            version: target_entry.version.clone().unwrap_or_default(),
+            is_default: is_default_target(paths, target_entry),
         })
         .collect::<Vec<_>>();
 
@@ -279,13 +270,13 @@ async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineS
         override_count: active_profile.overrides.len(),
         enable_tracking: active_profile.enable_tracking,
         disable_telemetry: active_profile.disable_telemetry,
-        selected_target_version_guid,
+        selected_target_installation_id,
         available_targets,
         scan: EngineScanInfo {
             can_pattern_scan: target.is_some(),
             source: scan_source,
-            target_version_guid: target.as_ref().map(|entry| entry.version_guid.clone()),
-            target_version: target.as_ref().map(|entry| entry.version.clone()),
+            target_installation_id: target.as_ref().map(|entry| entry.id.to_string()),
+            target_version: target.as_ref().and_then(|entry| entry.version.clone()),
             last_scanned_version_guid,
             last_scanned_at,
             warning,
@@ -367,26 +358,33 @@ fn build_flag_records(
     flags
 }
 
+fn scan_cache_key(installation: &StudioInstallation) -> String {
+    installation
+        .version_guid
+        .clone()
+        .unwrap_or_else(|| installation.id.as_str().replace([':', '/', '\\'], "_"))
+}
+
 async fn get_scan_cache_for_target(
     paths: &Paths,
-    target: &InstalledTarget,
+    target: &StudioInstallation,
     force_rescan: bool,
 ) -> Result<Option<EngineScanCache>> {
     if !force_rescan {
-        if let Some(cache) = load_scan_cache(paths, &target.version_guid)? {
+        if let Some(cache) = load_scan_cache(paths, &scan_cache_key(target))? {
             return Ok(Some(cache));
         }
     }
 
     let install_dir = target.install_dir.clone();
-    let executable_path = target.executable_path.clone();
+    let executable_path = target.executable.clone();
     let flags = tokio::task::spawn_blocking(move || scan_install_flags(&install_dir, &executable_path))
         .await
         .context("engine flag scan task failed to join")??;
 
     let cache = EngineScanCache {
-        version_guid: target.version_guid.clone(),
-        version: target.version.clone(),
+        version_guid: scan_cache_key(target),
+        version: target.version.clone().unwrap_or_default(),
         scanned_at: Utc::now().to_rfc3339(),
         flags,
     };
@@ -429,60 +427,50 @@ fn stringify_setting_value(value: &Value) -> String {
     }
 }
 
-fn resolve_installed_targets(paths: &Paths) -> Result<Vec<InstalledTarget>> {
-    let studio_preferences = load_studio_preferences(paths).unwrap_or_default();
-    let mut installed_versions = discover_installed_versions(paths)?;
-    installed_versions.retain(|version| {
-        version.install_dir.is_some() && version.executable_path.is_some() && version.is_installed
-    });
-    installed_versions.sort_by(|left, right| {
+fn resolve_installed_targets(paths: &Paths) -> Result<Vec<StudioInstallation>> {
+    let mut targets: Vec<StudioInstallation> = installation::discover(paths)
+        .into_iter()
+        .filter(|target| {
+            target.capabilities.contains(Capabilities::ENGINE_FLAGS) && target.executable.exists()
+        })
+        .collect();
+
+    targets.sort_by(|left, right| {
         right
             .installed_at
             .cmp(&left.installed_at)
             .then_with(|| right.version.cmp(&left.version))
     });
 
-    installed_versions
-        .into_iter()
-        .map(|version| {
-            let version_guid = version.version_guid.clone();
-            Ok(InstalledTarget {
-                version_guid,
-                version: version.version,
-                install_dir: PathBuf::from(
-                    version
-                        .install_dir
-                        .context("installed Studio version is missing its install directory")?,
-                ),
-                executable_path: PathBuf::from(
-                    version
-                        .executable_path
-                        .context("installed Studio version is missing its executable path")?,
-                ),
-                is_default: studio_preferences
-                    .default_version_guid
-                    .as_deref()
-                    .map(|default_version_guid| same_version_guid(default_version_guid, &version.version_guid))
-                    .unwrap_or(false),
-            })
-        })
-        .collect()
+    Ok(targets)
+}
+
+fn is_default_target(paths: &Paths, target: &StudioInstallation) -> bool {
+    load_studio_preferences(paths)
+        .unwrap_or_default()
+        .default_installation_id
+        .as_deref()
+        == Some(target.id.as_str())
 }
 
 fn resolve_target_version(
+    paths: &Paths,
     preferences: &EnginePreferences,
-    installed_targets: &[InstalledTarget],
-) -> Option<InstalledTarget> {
-    if let Some(selected_target_guid) = preferences.selected_target_version_guid.as_deref() {
+    installed_targets: &[StudioInstallation],
+) -> Option<StudioInstallation> {
+    if let Some(selected_id) = preferences.selected_target_installation_id.as_deref() {
         if let Some(target) = installed_targets
             .iter()
-            .find(|target| same_version_guid(&target.version_guid, selected_target_guid))
+            .find(|target| target.id.as_str() == selected_id)
         {
             return Some(target.clone());
         }
     }
 
-    if let Some(default_target) = installed_targets.iter().find(|target| target.is_default) {
+    if let Some(default_target) = installed_targets
+        .iter()
+        .find(|target| is_default_target(paths, target))
+    {
         return Some(default_target.clone());
     }
 
@@ -492,7 +480,8 @@ fn resolve_target_version(
 fn resolve_active_target_guid(paths: &Paths, preferences: &EnginePreferences) -> Result<Option<String>> {
     let installed_targets = resolve_installed_targets(paths)?;
 
-    Ok(resolve_target_version(preferences, &installed_targets).map(|target| target.version_guid))
+    Ok(resolve_target_version(paths, preferences, &installed_targets)
+        .map(|target| target.id.to_string()))
 }
 
 fn active_profile<'a>(
@@ -529,7 +518,7 @@ async fn sync_preferences_to_installed_versions(
     preferences: &EnginePreferences,
 ) -> Result<()> {
     for target in resolve_installed_targets(paths)? {
-        let profile = active_profile(preferences, Some(&target.version_guid));
+        let profile = active_profile(preferences, Some(target.id.as_str()));
         apply_preferences_to_install_dir(&target.install_dir, profile).await?;
     }
 
@@ -660,11 +649,11 @@ fn infer_default_value(name: &str, current: Option<&str>) -> String {
     }
 }
 
-fn read_target_version_guid_from_install_dir(install_dir: &Path) -> Result<String> {
-    let manifest_path = version_manifest_path(install_dir);
-    let manifest = read_installed_manifest(&manifest_path)?;
-
-    Ok(manifest.version_guid)
+fn installation_id_for_install_dir(paths: &Paths, install_dir: &Path) -> Option<String> {
+    installation::discover(paths)
+        .into_iter()
+        .find(|candidate| candidate.install_dir == install_dir)
+        .map(|candidate| candidate.id.to_string())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

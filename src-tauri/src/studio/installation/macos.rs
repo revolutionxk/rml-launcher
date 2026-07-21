@@ -1,3 +1,5 @@
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,7 +13,6 @@ use super::{Capabilities, InstallationProvider, InstallationSource, StudioInstal
 const BUNDLE_IDENTIFIER: &str = "com.roblox.RobloxStudio";
 const BUNDLE_EXECUTABLE: &str = "Contents/MacOS/RobloxStudio";
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) struct MacBundleProvider;
 
 impl InstallationProvider for MacBundleProvider {

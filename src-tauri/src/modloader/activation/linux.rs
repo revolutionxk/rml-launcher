@@ -7,7 +7,7 @@ pub struct LinuxActivation;
 
 impl LinuxActivation {
     fn set_override(context: &ActivationContext<'_>, enabled: bool) -> Result<()> {
-        if context.version_guid != crate::vinegar::INSTANCE_ID {
+        if context.installation_id != crate::vinegar::INSTANCE_ID {
             return Ok(());
         }
 

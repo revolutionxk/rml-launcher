@@ -15,7 +15,7 @@ mod macos;
 mod windows;
 
 pub struct ActivationContext<'a> {
-    pub version_guid: &'a str,
+    pub installation_id: &'a str,
     pub install_dir: &'a Path,
 }
 

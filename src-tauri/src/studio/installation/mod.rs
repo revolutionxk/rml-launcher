@@ -11,11 +11,7 @@ use tracing::warn;
 
 use crate::Paths;
 
-pub(crate) use macos::MacBundleProvider;
-pub(crate) use managed::ManagedProvider;
-pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
-pub(crate) use vinegar::VinegarProvider;
-pub(crate) use windows::WindowsProvider;
+pub(crate) use model::{Capabilities, InstallationSource, StudioInstallation};
 
 pub(crate) trait InstallationProvider: Send + Sync {
     fn source(&self) -> InstallationSource;
@@ -55,6 +51,43 @@ pub(crate) fn collect(
     }
 
     installations
+}
+
+pub(crate) fn providers() -> Vec<Box<dyn InstallationProvider>> {
+    let mut providers: Vec<Box<dyn InstallationProvider>> =
+        vec![Box::new(managed::ManagedProvider)];
+
+    #[cfg(target_os = "windows")]
+    providers.push(Box::new(windows::WindowsProvider));
+
+    #[cfg(target_os = "macos")]
+    providers.push(Box::new(macos::MacBundleProvider));
+
+    #[cfg(target_os = "linux")]
+    providers.push(Box::new(vinegar::VinegarProvider));
+
+    providers
+}
+
+pub(crate) fn discover(paths: &Paths) -> Vec<StudioInstallation> {
+    collect(&providers(), paths)
+}
+
+pub(crate) fn resolve(paths: &Paths, id: &str) -> Option<StudioInstallation> {
+    select(discover(paths), id)
+}
+
+fn select(installations: Vec<StudioInstallation>, id: &str) -> Option<StudioInstallation> {
+    let matched = installations
+        .iter()
+        .position(|installation| installation.id.as_str() == id)
+        .or_else(|| {
+            installations
+                .iter()
+                .position(|installation| installation.version_guid.as_deref() == Some(id))
+        })?;
+
+    installations.into_iter().nth(matched)
 }
 
 #[cfg(test)]
@@ -130,6 +163,47 @@ mod tests {
 
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].source, InstallationSource::Managed);
+    }
+
+    #[test]
+    fn resolution_selects_the_installation_with_the_matching_id() {
+        let installations = vec![
+            installation(InstallationSource::Managed, "/managed/a"),
+            installation(InstallationSource::Bloxstrap, "/bloxstrap/b"),
+        ];
+        let wanted = installations[1].id.as_str().to_owned();
+
+        let found = select(installations, &wanted).unwrap();
+
+        assert_eq!(found.source, InstallationSource::Bloxstrap);
+    }
+
+    #[test]
+    fn resolution_falls_back_to_a_bare_version_guid_for_migrated_preferences() {
+        let mut managed = installation(InstallationSource::Managed, "/managed/a");
+        managed.version_guid = Some("version-legacy".into());
+
+        let found = select(vec![managed], "version-legacy").unwrap();
+
+        assert_eq!(found.source, InstallationSource::Managed);
+    }
+
+    #[test]
+    fn resolution_prefers_an_exact_id_over_a_version_guid_match() {
+        let mut managed = installation(InstallationSource::Managed, "/managed/a");
+        managed.version_guid = Some("version-shared".into());
+        let mut bloxstrap = installation(InstallationSource::Bloxstrap, "/bloxstrap/b");
+        bloxstrap.version_guid = Some("version-shared".into());
+        let wanted = bloxstrap.id.as_str().to_owned();
+
+        let found = select(vec![managed, bloxstrap], &wanted).unwrap();
+
+        assert_eq!(found.source, InstallationSource::Bloxstrap);
+    }
+
+    #[test]
+    fn resolution_returns_none_when_nothing_matches() {
+        assert!(select(vec![installation(InstallationSource::Managed, "/a")], "nope").is_none());
     }
 
     #[test]

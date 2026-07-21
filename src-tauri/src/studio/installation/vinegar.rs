@@ -1,3 +1,5 @@
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+
 use anyhow::Result;
 
 use crate::vinegar;
@@ -7,7 +9,6 @@ use super::{Capabilities, InstallationProvider, InstallationSource, StudioInstal
 
 const STUDIO_EXECUTABLE: &str = "RobloxStudioBeta.exe";
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) struct VinegarProvider;
 
 impl InstallationProvider for VinegarProvider {

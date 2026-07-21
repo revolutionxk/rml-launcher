@@ -13,7 +13,7 @@ pub struct MacosActivation;
 
 impl LoaderActivation for MacosActivation {
     fn activate(&self, context: &ActivationContext<'_>) -> Result<()> {
-        info!(version_guid = context.version_guid, "activating the mod loader for Studio version");
+        info!(installation_id = context.installation_id, "activating the mod loader for Studio version");
         let bundle = locate_bundle(context.install_dir)?;
         let binary = main_binary(&bundle)?;
         let loader = loader_library_path(context.install_dir)?;

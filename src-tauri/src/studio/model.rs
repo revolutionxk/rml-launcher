@@ -1,6 +1,7 @@
-use std::path::{Path, PathBuf};
-
 use serde::{Deserialize, Serialize};
+
+use super::config::CURRENT_CHANNEL;
+use super::installation::{Capabilities, InstallationSource, StudioInstallation};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,8 +43,12 @@ pub struct InstalledStudioManifest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StudioPreferences {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_version_guid: Option<String>,
+    #[serde(
+        default,
+        alias = "defaultVersionGuid",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub default_installation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -59,6 +64,8 @@ pub struct StudioVersionEntry {
     pub is_default: bool,
     pub is_latest: bool,
     pub is_installed: bool,
+    pub source: InstallationSource,
+    pub capabilities: Capabilities,
     pub executable_path: Option<String>,
     pub install_dir: Option<String>,
 }
@@ -71,7 +78,7 @@ impl StudioVersionEntry {
         published_at: Option<String>,
     ) -> Self {
         Self {
-            id: version_guid.clone(),
+            id: format!("remote:{version_guid}"),
             version_guid,
             version,
             channel: channel.to_string(),
@@ -81,29 +88,35 @@ impl StudioVersionEntry {
             is_default: false,
             is_latest: false,
             is_installed: false,
+            source: InstallationSource::Managed,
+            capabilities: Capabilities::MANAGED,
             executable_path: None,
             install_dir: None,
         }
     }
 
-    pub fn from_installed(
-        manifest: InstalledStudioManifest,
-        install_dir: &Path,
-        executable_path: Option<PathBuf>,
-    ) -> Self {
+    pub fn from_installation(installation: &StudioInstallation) -> Self {
         Self {
-            id: manifest.version_guid.clone(),
-            version_guid: manifest.version_guid,
-            version: manifest.version,
-            channel: manifest.channel,
-            installed_at: Some(manifest.installed_at),
-            published_at: manifest.published_at,
-            integrity_verified_at: manifest.integrity_verified_at,
+            id: installation.id.to_string(),
+            version_guid: installation.version_guid.clone().unwrap_or_default(),
+            version: installation.version.clone().unwrap_or_default(),
+            channel: installation
+                .channel
+                .clone()
+                .unwrap_or_else(|| CURRENT_CHANNEL.to_string()),
+            installed_at: installation.installed_at.clone(),
+            published_at: installation.published_at.clone(),
+            integrity_verified_at: installation.integrity_verified_at.clone(),
             is_default: false,
             is_latest: false,
             is_installed: true,
-            executable_path: executable_path.map(|path| path.to_string_lossy().into_owned()),
-            install_dir: Some(install_dir.to_string_lossy().into_owned()),
+            source: installation.source,
+            capabilities: installation.capabilities,
+            executable_path: installation
+                .executable
+                .exists()
+                .then(|| installation.executable.to_string_lossy().into_owned()),
+            install_dir: Some(installation.install_dir.to_string_lossy().into_owned()),
         }
     }
 }

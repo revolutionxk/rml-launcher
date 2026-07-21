@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -44,7 +43,10 @@ impl InstallationProvider for ManagedProvider {
             );
             installation.version = Some(manifest.version);
             installation.version_guid = Some(manifest.version_guid);
+            installation.channel = Some(manifest.channel);
             installation.installed_at = Some(manifest.installed_at);
+            installation.published_at = manifest.published_at;
+            installation.integrity_verified_at = manifest.integrity_verified_at;
             installation.capabilities = Capabilities::MANAGED;
 
             installations.push(installation);
@@ -57,7 +59,7 @@ impl InstallationProvider for ManagedProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use std::path::{Path, PathBuf};
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rml-managed-{name}-{}", std::process::id()));
