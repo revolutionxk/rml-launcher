@@ -1,5 +1,6 @@
 mod managed;
 mod model;
+mod windows;
 
 use std::collections::HashSet;
 
@@ -10,6 +11,7 @@ use crate::Paths;
 
 pub(crate) use managed::ManagedProvider;
 pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
+pub(crate) use windows::WindowsProvider;
 
 pub(crate) trait InstallationProvider: Send + Sync {
     fn source(&self) -> InstallationSource;
