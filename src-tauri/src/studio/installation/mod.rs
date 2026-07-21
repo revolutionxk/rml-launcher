@@ -1,3 +1,4 @@
+mod macos;
 mod managed;
 mod model;
 mod windows;
@@ -9,6 +10,7 @@ use tracing::warn;
 
 use crate::Paths;
 
+pub(crate) use macos::MacBundleProvider;
 pub(crate) use managed::ManagedProvider;
 pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
 pub(crate) use windows::WindowsProvider;
