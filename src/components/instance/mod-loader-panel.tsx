@@ -35,11 +35,11 @@ const CHANNEL_VARIANTS: Record<ModLoaderChannel, "blue" | "green" | "yellow" | "
   };
 
 interface ModLoaderPanelProps {
-  versionGuid: string;
+  installationId: string;
   installed: ModLoaderInstalled | null;
 }
 
-export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) {
+export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProps) {
   const { formatDate, t } = useI18n();
   const queryClient = useQueryClient();
   const { data: releases = [], isLoading, isFetching, refetch } = useModLoaderReleases();
@@ -79,7 +79,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
     const unlistenPromise = listen<ModLoaderInstallProgress>(
       MODLOADER_INSTALL_EVENT,
       ({ payload }) => {
-        if (disposed || payload.versionGuid !== versionGuid) {
+        if (disposed || payload.installationId !== installationId) {
           return;
         }
 
@@ -102,13 +102,13 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
       disposed = true;
       void unlistenPromise.then((unlisten) => unlisten());
     };
-  }, [versionGuid, t]);
+  }, [installationId, t]);
 
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.instances }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.mods(versionGuid) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.modloaderStatus(versionGuid) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.mods(installationId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.modloaderStatus(installationId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.vinegarStatus }),
     ]);
   };
@@ -120,7 +120,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
     }
     setErrorMessage(null);
     try {
-      await installModLoader(versionGuid, target);
+      await installModLoader(installationId, target);
       await invalidate();
     } catch (error) {
       setErrorMessage(
@@ -137,7 +137,7 @@ export function ModLoaderPanel({ versionGuid, installed }: ModLoaderPanelProps) 
     setIsUninstalling(true);
     setErrorMessage(null);
     try {
-      await uninstallModLoader(versionGuid);
+      await uninstallModLoader(installationId);
       await invalidate();
     } catch (error) {
       setErrorMessage(

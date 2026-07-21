@@ -14,8 +14,8 @@ export const queryKeys = {
   instances: ["instances"] as const,
   studioVersions: ["studio-versions"] as const,
   modloaderReleases: ["modloader-releases"] as const,
-  modloaderStatus: (versionGuid: string) => ["modloader-status", versionGuid] as const,
-  mods: (versionGuid: string) => ["mods", versionGuid] as const,
+  modloaderStatus: (installationId: string) => ["modloader-status", installationId] as const,
+  mods: (installationId: string) => ["mods", installationId] as const,
   engineGeneralSettings: ["engine-general-settings"] as const,
   studioProtocol: ["studio-protocol"] as const,
 };
@@ -79,17 +79,17 @@ export function useModLoaderReleases() {
   });
 }
 
-export function useModLoaderStatus(versionGuid: string, enabled = true) {
+export function useModLoaderStatus(installationId: string, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.modloaderStatus(versionGuid),
-    queryFn: () => getModLoaderStatus(versionGuid),
+    queryKey: queryKeys.modloaderStatus(installationId),
+    queryFn: () => getModLoaderStatus(installationId),
     enabled,
   });
 }
 
-export function useMods(versionGuid: string) {
+export function useMods(installationId: string) {
   return useQuery({
-    queryKey: queryKeys.mods(versionGuid),
-    queryFn: () => listMods(versionGuid),
+    queryKey: queryKeys.mods(installationId),
+    queryFn: () => listMods(installationId),
   });
 }

@@ -150,8 +150,8 @@ export function VinegarStudio() {
                 </div>
               </Card.Root>
 
-              <ModLoaderPanel versionGuid={VINEGAR_INSTANCE_ID} installed={modloader ?? null} />
-              <ModsPanel versionGuid={VINEGAR_INSTANCE_ID} />
+              <ModLoaderPanel installationId={VINEGAR_INSTANCE_ID} installed={modloader ?? null} />
+              <ModsPanel installationId={VINEGAR_INSTANCE_ID} />
             </>
           )}
         </div>

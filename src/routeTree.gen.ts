@@ -9,21 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MarketplaceRouteImport } from './routes/marketplace'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
-import { Route as SettingsVersionsRouteImport } from './routes/settings/versions'
-import { Route as SettingsInstancesRouteImport } from './routes/settings/instances'
-import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
-import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsAboutRouteImport } from './routes/settings/about'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
+import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
+import { Route as SettingsInstancesRouteImport } from './routes/settings/instances'
+import { Route as SettingsVersionsRouteImport } from './routes/settings/versions'
 import { Route as SettingsInstancesIndexRouteImport } from './routes/settings/instances.index'
 import { Route as SettingsInstancesInstallationIdRouteImport } from './routes/settings/instances.$installationId'
 
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketplaceRoute = MarketplaceRouteImport.update({
@@ -31,9 +31,9 @@ const MarketplaceRoute = MarketplaceRouteImport.update({
   path: '/marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
@@ -41,19 +41,9 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsVersionsRoute = SettingsVersionsRouteImport.update({
-  id: '/versions',
-  path: '/versions',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsInstancesRoute = SettingsInstancesRouteImport.update({
-  id: '/instances',
-  path: '/instances',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsEngineRoute = SettingsEngineRouteImport.update({
-  id: '/engine',
-  path: '/engine',
+const SettingsAboutRoute = SettingsAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
@@ -61,9 +51,19 @@ const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsAboutRoute = SettingsAboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const SettingsEngineRoute = SettingsEngineRouteImport.update({
+  id: '/engine',
+  path: '/engine',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsInstancesRoute = SettingsInstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsVersionsRoute = SettingsVersionsRouteImport.update({
+  id: '/versions',
+  path: '/versions',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsInstancesIndexRoute = SettingsInstancesIndexRouteImport.update({
@@ -164,11 +164,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketplace': {
@@ -178,11 +178,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/': {
@@ -192,25 +192,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/versions': {
-      id: '/settings/versions'
-      path: '/versions'
-      fullPath: '/settings/versions'
-      preLoaderRoute: typeof SettingsVersionsRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/instances': {
-      id: '/settings/instances'
-      path: '/instances'
-      fullPath: '/settings/instances'
-      preLoaderRoute: typeof SettingsInstancesRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/engine': {
-      id: '/settings/engine'
-      path: '/engine'
-      fullPath: '/settings/engine'
-      preLoaderRoute: typeof SettingsEngineRouteImport
+    '/settings/about': {
+      id: '/settings/about'
+      path: '/about'
+      fullPath: '/settings/about'
+      preLoaderRoute: typeof SettingsAboutRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/appearance': {
@@ -220,11 +206,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAppearanceRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/about': {
-      id: '/settings/about'
-      path: '/about'
-      fullPath: '/settings/about'
-      preLoaderRoute: typeof SettingsAboutRouteImport
+    '/settings/engine': {
+      id: '/settings/engine'
+      path: '/engine'
+      fullPath: '/settings/engine'
+      preLoaderRoute: typeof SettingsEngineRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/instances': {
+      id: '/settings/instances'
+      path: '/instances'
+      fullPath: '/settings/instances'
+      preLoaderRoute: typeof SettingsInstancesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/versions': {
+      id: '/settings/versions'
+      path: '/versions'
+      fullPath: '/settings/versions'
+      preLoaderRoute: typeof SettingsVersionsRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/instances/': {

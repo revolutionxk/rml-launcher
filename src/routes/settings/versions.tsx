@@ -27,6 +27,8 @@ import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/i18n";
 import { queryKeys, useStudioVersions } from "@/lib/queries";
 import {
+  can,
+  Capability,
   installStudioVersion,
   launchStudio,
   openStudioInstallDir,
@@ -66,9 +68,9 @@ interface VersionActionsMenuProps {
   version: StudioVersionRecord;
   isBusy: boolean;
   onToggleDefault: (version: StudioVersionRecord) => Promise<void>;
-  onOpenInstallDir: (versionGuid: string) => Promise<void>;
-  onRevalidate: (versionGuid: string) => Promise<void>;
-  onDelete: (versionGuid: string) => Promise<void>;
+  onOpenInstallDir: (installationId: string) => Promise<void>;
+  onRevalidate: (installationId: string) => Promise<void>;
+  onDelete: (installationId: string) => Promise<void>;
   t: ReturnType<typeof useI18n>["t"];
 }
 
@@ -117,21 +119,23 @@ function VersionActionsMenu({
                 {version.isDefault ? t("versions-clear-default") : t("versions-set-default")}
               </span>
             </Menu.Item>
+            {can(version, Capability.Revalidate) && (
+              <Menu.Item
+                disabled={isBusy}
+                onClick={() => {
+                  void onRevalidate(version.id);
+                }}
+              >
+                <span className="flex h-[14px] w-[14px] items-center justify-center text-text-dim">
+                  <ShieldCheck size={13} />
+                </span>
+                <span>{t("versions-revalidate")}</span>
+              </Menu.Item>
+            )}
             <Menu.Item
               disabled={isBusy}
               onClick={() => {
-                void onRevalidate(version.versionGuid);
-              }}
-            >
-              <span className="flex h-[14px] w-[14px] items-center justify-center text-text-dim">
-                <ShieldCheck size={13} />
-              </span>
-              <span>{t("versions-revalidate")}</span>
-            </Menu.Item>
-            <Menu.Item
-              disabled={isBusy}
-              onClick={() => {
-                void onOpenInstallDir(version.versionGuid);
+                void onOpenInstallDir(version.id);
               }}
             >
               <span className="flex h-[14px] w-[14px] items-center justify-center text-text-dim">
@@ -139,18 +143,20 @@ function VersionActionsMenu({
               </span>
               <span>{t("versions-open-folder")}</span>
             </Menu.Item>
-            <Menu.Item
-              disabled={isBusy}
-              className="text-red data-[highlighted]:text-red"
-              onClick={() => {
-                void onDelete(version.versionGuid);
-              }}
-            >
-              <span className="flex h-[14px] w-[14px] items-center justify-center text-red/85">
-                <Trash2 size={13} />
-              </span>
-              <span>{t("versions-uninstall")}</span>
-            </Menu.Item>
+            {can(version, Capability.Uninstall) && (
+              <Menu.Item
+                disabled={isBusy}
+                className="text-red data-[highlighted]:text-red"
+                onClick={() => {
+                  void onDelete(version.id);
+                }}
+              >
+                <span className="flex h-[14px] w-[14px] items-center justify-center text-red/85">
+                  <Trash2 size={13} />
+                </span>
+                <span>{t("versions-uninstall")}</span>
+              </Menu.Item>
+            )}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>
@@ -246,12 +252,12 @@ function VersionsPage() {
     }
   };
 
-  const handleLaunch = async (versionGuid: string) => {
-    setLaunchingVersionId(versionGuid);
+  const handleLaunch = async (installationId: string) => {
+    setLaunchingVersionId(installationId);
     setErrorMessage(null);
 
     try {
-      await launchStudio(versionGuid);
+      await launchStudio(installationId);
     } catch (error) {
       setErrorMessage(
         t("versions-error-launch", {
@@ -263,12 +269,12 @@ function VersionsPage() {
     }
   };
 
-  const handleDelete = async (versionGuid: string) => {
-    setUninstallingVersionId(versionGuid);
+  const handleDelete = async (installationId: string) => {
+    setUninstallingVersionId(installationId);
     setErrorMessage(null);
 
     try {
-      await uninstallStudio(versionGuid);
+      await uninstallStudio(installationId);
       await refreshVersions();
     } catch (error) {
       setErrorMessage(
@@ -282,11 +288,11 @@ function VersionsPage() {
   };
 
   const handleToggleDefault = async (version: StudioVersionRecord) => {
-    setDefaultingVersionId(version.versionGuid);
+    setDefaultingVersionId(version.id);
     setErrorMessage(null);
 
     try {
-      await setDefaultStudioVersion(version.isDefault ? null : version.versionGuid);
+      await setDefaultStudioVersion(version.isDefault ? null : version.id);
       await refreshVersions();
     } catch (error) {
       setErrorMessage(getErrorMessage(error, t("versions-error-generic")));
@@ -295,12 +301,12 @@ function VersionsPage() {
     }
   };
 
-  const handleOpenInstallDir = async (versionGuid: string) => {
-    setOpeningVersionId(versionGuid);
+  const handleOpenInstallDir = async (installationId: string) => {
+    setOpeningVersionId(installationId);
     setErrorMessage(null);
 
     try {
-      await openStudioInstallDir(versionGuid);
+      await openStudioInstallDir(installationId);
     } catch (error) {
       setErrorMessage(
         t("versions-error-open-folder", {
@@ -312,12 +318,12 @@ function VersionsPage() {
     }
   };
 
-  const handleRevalidate = async (versionGuid: string) => {
-    setRevalidatingVersionId(versionGuid);
+  const handleRevalidate = async (installationId: string) => {
+    setRevalidatingVersionId(installationId);
     setErrorMessage(null);
 
     try {
-      await revalidateStudioVersion(versionGuid);
+      await revalidateStudioVersion(installationId);
       await refreshVersions();
     } catch (error) {
       setErrorMessage(
@@ -334,7 +340,7 @@ function VersionsPage() {
     const version = filteredVersions[index];
     const installState = activeInstall?.versionGuid === version.versionGuid ? activeInstall : null;
     const isDownloading = installState !== null;
-    const isRevalidating = revalidatingVersionId === version.versionGuid;
+    const isRevalidating = revalidatingVersionId === version.id;
     const progress = installState ? Math.round(installState.progress) : 0;
     const publishedDate = version.publishedAt ? formatDate(version.publishedAt) : null;
     const integrityDate = version.integrityVerifiedAt
@@ -342,11 +348,11 @@ function VersionsPage() {
       : null;
     const isBusy =
       isInstalling ||
-      launchingVersionId === version.versionGuid ||
-      openingVersionId === version.versionGuid ||
-      defaultingVersionId === version.versionGuid ||
+      launchingVersionId === version.id ||
+      openingVersionId === version.id ||
+      defaultingVersionId === version.id ||
       isRevalidating ||
-      uninstallingVersionId === version.versionGuid;
+      uninstallingVersionId === version.id;
 
     let metadata = publishedDate
       ? t("versions-meta-history", {
@@ -512,11 +518,11 @@ function VersionsPage() {
                   aria-label={t("versions-launch")}
                   disabled={isBusy}
                   onClick={() => {
-                    void handleLaunch(version.versionGuid);
+                    void handleLaunch(version.id);
                   }}
                 >
                   <Button.Icon>
-                    {launchingVersionId === version.versionGuid ? (
+                    {launchingVersionId === version.id ? (
                       <RefreshCw size={13} className="animate-spin" />
                     ) : (
                       <Play size={13} />

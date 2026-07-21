@@ -2,6 +2,20 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type StudioInstallPhase = "resolving" | "downloading" | "extracting" | "finalizing" | "completed" | "failed";
 
+export type InstallationSource = "managed" | "robloxOfficial" | "bloxstrap" | "macBundle" | "vinegar";
+
+export const Capability = {
+  Launch: 1 << 0,
+  Mods: 1 << 1,
+  EngineFlags: 1 << 2,
+  Uninstall: 1 << 3,
+  Revalidate: 1 << 4,
+} as const;
+
+export function can(record: { capabilities: number }, capability: number) {
+  return (record.capabilities & capability) === capability;
+}
+
 export interface StudioVersionRecord {
   id: string;
   versionGuid: string;
@@ -13,6 +27,8 @@ export interface StudioVersionRecord {
   isDefault: boolean;
   isLatest: boolean;
   isInstalled: boolean;
+  source: InstallationSource;
+  capabilities: number;
   executablePath: string | null;
   installDir: string | null;
 }
@@ -44,8 +60,8 @@ export async function installLatestStudio() {
   return invoke<StudioVersionRecord>("install_latest_studio");
 }
 
-export async function setDefaultStudioVersion(versionGuid: string | null) {
-  return invoke<void>("set_default_studio_version", { versionGuid });
+export async function setDefaultStudioVersion(installationId: string | null) {
+  return invoke<void>("set_default_studio_version", { installationId });
 }
 
 export async function installStudioVersion(version: StudioVersionRecord) {
@@ -57,18 +73,18 @@ export async function installStudioVersion(version: StudioVersionRecord) {
   });
 }
 
-export async function launchStudio(versionGuid: string, uri?: string | null) {
-  return invoke<void>("launch_studio", { versionGuid, uri: uri ?? null });
+export async function launchStudio(installationId: string, uri?: string | null) {
+  return invoke<void>("launch_studio", { installationId, uri: uri ?? null });
 }
 
-export async function openStudioInstallDir(versionGuid: string) {
-  return invoke<void>("open_studio_install_dir", { versionGuid });
+export async function openStudioInstallDir(installationId: string) {
+  return invoke<void>("open_studio_install_dir", { installationId });
 }
 
-export async function revalidateStudioVersion(versionGuid: string) {
-  return invoke<StudioVersionRecord>("revalidate_studio_version", { versionGuid });
+export async function revalidateStudioVersion(installationId: string) {
+  return invoke<StudioVersionRecord>("revalidate_studio_version", { installationId });
 }
 
-export async function uninstallStudio(versionGuid: string) {
-  return invoke<void>("uninstall_studio", { versionGuid });
+export async function uninstallStudio(installationId: string) {
+  return invoke<void>("uninstall_studio", { installationId });
 }

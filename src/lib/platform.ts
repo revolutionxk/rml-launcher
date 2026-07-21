@@ -21,7 +21,7 @@ export interface VinegarStatus {
   studioFound: boolean;
 }
 
-export const VINEGAR_INSTANCE_ID = "vinegar";
+export const VINEGAR_INSTANCE_ID = "vinegar:studio";
 
 export async function getVinegarStatus() {
   return invoke<VinegarStatus>("vinegar_status");
