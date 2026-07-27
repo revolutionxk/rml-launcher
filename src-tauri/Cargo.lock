@@ -3407,8 +3407,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "core-foundation",
  "futures-util",
  "md-5",
+ "plist",
  "reqwest 0.12.28",
  "rml-flag-scanner",
  "serde",

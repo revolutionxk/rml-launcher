@@ -107,7 +107,7 @@ export function Bootstrap({ uri, onExit }: BootstrapProps) {
         }
 
         setStage("launching");
-        await launchStudio(target.versionGuid, uri);
+        await launchStudio(target.id, uri);
         setStage("done");
         window.setTimeout(onExit, 2000);
       } catch (caught) {

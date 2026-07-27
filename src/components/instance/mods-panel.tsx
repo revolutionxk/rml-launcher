@@ -26,13 +26,13 @@ const KIND_VARIANTS: Record<ModKind, "blue" | "green" | "yellow" | "gray"> = {
 };
 
 interface ModsPanelProps {
-  versionGuid: string;
+  installationId: string;
 }
 
-export function ModsPanel({ versionGuid }: ModsPanelProps) {
+export function ModsPanel({ installationId }: ModsPanelProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useMods(versionGuid);
+  const { data, isLoading } = useMods(installationId);
 
   const [busyModId, setBusyModId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -43,7 +43,7 @@ export function ModsPanel({ versionGuid }: ModsPanelProps) {
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.mods(versionGuid) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.mods(installationId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.instances }),
     ]);
   };
@@ -62,7 +62,7 @@ export function ModsPanel({ versionGuid }: ModsPanelProps) {
       }
 
       setIsImporting(true);
-      await importMod(versionGuid, selection);
+      await importMod(installationId, selection);
       await refresh();
     } catch (error) {
       setErrorMessage(t("mods-error-import", { message: getErrorMessage(error, t("mods-error-generic")) }));
@@ -75,7 +75,7 @@ export function ModsPanel({ versionGuid }: ModsPanelProps) {
     setBusyModId(modId);
     setErrorMessage(null);
     try {
-      await setModEnabled(versionGuid, modId, enabled);
+      await setModEnabled(installationId, modId, enabled);
       await refresh();
     } catch (error) {
       setErrorMessage(getErrorMessage(error, t("mods-error-generic")));
@@ -88,7 +88,7 @@ export function ModsPanel({ versionGuid }: ModsPanelProps) {
     setBusyModId(modId);
     setErrorMessage(null);
     try {
-      await removeMod(versionGuid, modId);
+      await removeMod(installationId, modId);
       await refresh();
     } catch (error) {
       setErrorMessage(t("mods-error-remove", { message: getErrorMessage(error, t("mods-error-generic")) }));
@@ -147,7 +147,7 @@ export function ModsPanel({ versionGuid }: ModsPanelProps) {
               size="sm"
               className="ml-auto"
               disabled={!loaderInstalled}
-              onClick={() => openModsDir(versionGuid).catch(console.error)}
+              onClick={() => openModsDir(installationId).catch(console.error)}
             >
               <Button.Icon>
                 <FolderOpen size={13} />

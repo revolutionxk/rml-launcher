@@ -26,6 +26,8 @@ import { useI18n } from "@/i18n";
 import { getErrorMessage } from "@/lib/format";
 import { queryKeys, useInstances } from "@/lib/queries";
 import {
+  can,
+  Capability,
   launchStudio,
   openStudioInstallDir,
   setDefaultStudioVersion,
@@ -34,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import { EngineFlags } from "@/routes/settings/engine";
 
-export const Route = createFileRoute("/settings/instances/$versionGuid")({
+export const Route = createFileRoute("/settings/instances/$installationId")({
   component: InstanceDetailPage,
 });
 
@@ -61,10 +63,10 @@ function InstanceDetailPage() {
   const { formatDate, t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { versionGuid } = useParams({ from: "/settings/instances/$versionGuid" });
+  const { installationId } = useParams({ from: "/settings/instances/$installationId" });
   const { data: instances = [], isLoading } = useInstances();
 
-  const instance = instances.find((candidate) => candidate.versionGuid === versionGuid) ?? null;
+  const instance = instances.find((candidate) => candidate.id === installationId) ?? null;
 
   const [tab, setTab] = useState<InstanceTab>("mods");
   const [launching, setLaunching] = useState(false);
@@ -78,7 +80,7 @@ function InstanceDetailPage() {
     setLaunching(true);
     setErrorMessage(null);
     try {
-      await launchStudio(versionGuid);
+      await launchStudio(installationId);
     } catch (error) {
       setErrorMessage(
         t("instances-error-launch", {
@@ -97,7 +99,7 @@ function InstanceDetailPage() {
     setDefaulting(true);
     setErrorMessage(null);
     try {
-      await setDefaultStudioVersion(instance.isDefault ? null : versionGuid);
+      await setDefaultStudioVersion(instance.isDefault ? null : installationId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.instances });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, t("instances-error-generic")));
@@ -118,7 +120,7 @@ function InstanceDetailPage() {
     setDeleting(true);
     setErrorMessage(null);
     try {
-      await uninstallStudio(versionGuid);
+      await uninstallStudio(installationId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.instances });
       goBack();
     } catch (error) {
@@ -153,7 +155,7 @@ function InstanceDetailPage() {
     <div className="flex h-full min-h-0 flex-col gap-3 lg:gap-4">
       <BackLink label={t("instances-back")} onClick={goBack} />
       <motion.div
-        layoutId={`studio-card-${versionGuid}`}
+        layoutId={`studio-card-${installationId}`}
         transition={MORPH_TRANSITION}
         className={cn(
           "shrink-0 overflow-hidden rounded-lg border p-3.5 shadow-(--card-shadow) lg:p-4",
@@ -167,7 +169,7 @@ function InstanceDetailPage() {
       >
         <div className="flex flex-wrap items-center gap-3">
           <motion.div
-            layoutId={`studio-avatar-${versionGuid}`}
+            layoutId={`studio-avatar-${installationId}`}
             transition={MORPH_TRANSITION}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-sm",
@@ -180,7 +182,7 @@ function InstanceDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <motion.h1
-                layoutId={`studio-title-${versionGuid}`}
+                layoutId={`studio-title-${installationId}`}
                 transition={MORPH_TRANSITION}
                 className="text-[16px] font-semibold tracking-[-0.015em] text-text"
               >
@@ -258,23 +260,25 @@ function InstanceDetailPage() {
                       </span>
                     </Menu.Item>
                     <Menu.Item
-                      onClick={() => openStudioInstallDir(versionGuid).catch(console.error)}
+                      onClick={() => openStudioInstallDir(installationId).catch(console.error)}
                     >
                       <span className="flex h-[14px] w-[14px] items-center justify-center text-text-dim">
                         <FolderOpen size={13} />
                       </span>
                       <span>{t("versions-open-folder")}</span>
                     </Menu.Item>
-                    <Menu.Item
-                      disabled={isBusy}
-                      className="text-red data-[highlighted]:text-red"
-                      onClick={() => void handleDelete()}
-                    >
-                      <span className="flex h-[14px] w-[14px] items-center justify-center text-red/85">
-                        <Trash2 size={13} />
-                      </span>
-                      <span>{t("instances-delete")}</span>
-                    </Menu.Item>
+                    {can(instance, Capability.Uninstall) && (
+                      <Menu.Item
+                        disabled={isBusy}
+                        className="text-red data-[highlighted]:text-red"
+                        onClick={() => void handleDelete()}
+                      >
+                        <span className="flex h-[14px] w-[14px] items-center justify-center text-red/85">
+                          <Trash2 size={13} />
+                        </span>
+                        <span>{t("instances-delete")}</span>
+                      </Menu.Item>
+                    )}
                   </Menu.Popup>
                 </Menu.Positioner>
               </Menu.Portal>
@@ -303,12 +307,12 @@ function InstanceDetailPage() {
         {tab === "mods" ? (
           <div className="h-full overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
             <div className="flex flex-col gap-4 pb-1">
-              <ModLoaderPanel versionGuid={versionGuid} installed={instance.modloader} />
-              <ModsPanel versionGuid={versionGuid} />
+              <ModLoaderPanel installationId={installationId} installed={instance.modloader} />
+              <ModsPanel installationId={installationId} />
             </div>
           </div>
         ) : (
-          <EngineFlags embeddedTargetVersionGuid={versionGuid} />
+          <EngineFlags embeddedTargetInstallationId={installationId} />
         )}
       </div>
     </div>

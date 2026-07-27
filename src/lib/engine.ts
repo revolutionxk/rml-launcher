@@ -17,7 +17,7 @@ export interface EngineFlagRecord {
 export interface EngineScanInfo {
   canPatternScan: boolean;
   source: EngineScanSource;
-  targetVersionGuid: string | null;
+  targetInstallationId: string | null;
   targetVersion: string | null;
   lastScannedVersionGuid: string | null;
   lastScannedAt: string | null;
@@ -25,7 +25,7 @@ export interface EngineScanInfo {
 }
 
 export interface EngineTargetVersionRecord {
-  versionGuid: string;
+  id: string;
   version: string;
   isDefault: boolean;
 }
@@ -36,7 +36,7 @@ export interface EngineState {
   overrideCount: number;
   enableTracking: boolean;
   disableTelemetry: boolean;
-  selectedTargetVersionGuid: string | null;
+  selectedTargetInstallationId: string | null;
   availableTargets: EngineTargetVersionRecord[];
   scan: EngineScanInfo;
 }
@@ -84,8 +84,8 @@ export async function rescanEngineFlags() {
   return invoke<EngineState>("rescan_engine_flags");
 }
 
-export async function setEngineTargetVersion(versionGuid: string | null) {
-  return invoke<EngineState>("set_engine_target_version", { versionGuid });
+export async function setEngineTargetVersion(installationId: string | null) {
+  return invoke<EngineState>("set_engine_target_version", { installationId });
 }
 
 export async function applyEngineStatePatch(patch: EngineStatePatch) {

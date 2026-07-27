@@ -28,10 +28,10 @@ pub async fn install_release<S: InstallProgressSink>(
     sink: &S,
     cache_dir: PathBuf,
     release: &ModLoaderRelease,
-    version_guid: &str,
+    installation_id: &str,
     install_dir: &Path,
 ) -> Result<ModLoaderInstalled> {
-    let reporter = ProgressReporter::new(sink, version_guid, &release.tag, release.asset.size);
+    let reporter = ProgressReporter::new(sink, installation_id, &release.tag, release.asset.size);
 
     let result: Result<ModLoaderInstalled> = async {
         reporter.emit(ModLoaderPhase::Resolving, 0, None);
@@ -51,7 +51,7 @@ pub async fn install_release<S: InstallProgressSink>(
         reporter.emit(ModLoaderPhase::Finalizing, release.asset.size, None);
 
         let manifest = ModLoaderInstalled {
-            version_guid: version_guid.to_string(),
+            installation_id: installation_id.to_string(),
             tag: release.tag.clone(),
             name: release.name.clone(),
             channel: release.channel,
@@ -71,12 +71,12 @@ pub async fn install_release<S: InstallProgressSink>(
 
     match result {
         Ok(manifest) => {
-            info!(version_guid, tag = %manifest.tag, "mod loader installation completed");
+            info!(installation_id, tag = %manifest.tag, "mod loader installation completed");
             reporter.emit(ModLoaderPhase::Completed, release.asset.size, None);
             Ok(manifest)
         }
         Err(error) => {
-            warn!(version_guid, tag = %release.tag, error = %error, "mod loader installation failed");
+            warn!(installation_id, tag = %release.tag, error = %error, "mod loader installation failed");
             reporter.emit(ModLoaderPhase::Failed, 0, Some(error.to_string()));
             Err(error)
         }
@@ -310,16 +310,16 @@ fn extract_bundle_blocking(bundle_path: &Path, install_dir: &Path) -> Result<()>
 
 struct ProgressReporter<'a, S: InstallProgressSink> {
     sink: &'a S,
-    version_guid: String,
+    installation_id: String,
     tag: String,
     total_bytes: u64,
 }
 
 impl<'a, S: InstallProgressSink> ProgressReporter<'a, S> {
-    fn new(sink: &'a S, version_guid: &str, tag: &str, total_bytes: u64) -> Self {
+    fn new(sink: &'a S, installation_id: &str, tag: &str, total_bytes: u64) -> Self {
         Self {
             sink,
-            version_guid: version_guid.to_string(),
+            installation_id: installation_id.to_string(),
             tag: tag.to_string(),
             total_bytes,
         }
@@ -327,7 +327,7 @@ impl<'a, S: InstallProgressSink> ProgressReporter<'a, S> {
 
     fn emit(&self, phase: ModLoaderPhase, downloaded_bytes: u64, error: Option<String>) {
         self.sink.report(ModLoaderInstallProgress {
-            version_guid: self.version_guid.clone(),
+            installation_id: self.installation_id.clone(),
             tag: self.tag.clone(),
             progress: compute_progress(&phase, downloaded_bytes, self.total_bytes),
             phase,

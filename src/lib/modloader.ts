@@ -37,7 +37,7 @@ export interface ModLoaderRelease {
 }
 
 export interface ModLoaderInstalled {
-  versionGuid: string;
+  installationId: string;
   tag: string;
   name: string;
   channel: ModLoaderChannel;
@@ -50,7 +50,7 @@ export interface ModLoaderInstalled {
 }
 
 export interface ModLoaderInstallProgress {
-  versionGuid: string;
+  installationId: string;
   tag: string;
   phase: ModLoaderPhase;
   downloadedBytes: number;
@@ -65,16 +65,16 @@ export async function listModLoaderReleases() {
   return invoke<ModLoaderRelease[]>("list_modloader_releases");
 }
 
-export async function getModLoaderStatus(versionGuid: string) {
-  return invoke<ModLoaderInstalled | null>("get_modloader_status", { versionGuid });
+export async function getModLoaderStatus(installationId: string) {
+  return invoke<ModLoaderInstalled | null>("get_modloader_status", { installationId });
 }
 
-export async function installModLoader(versionGuid: string, tag: string) {
-  return invoke<ModLoaderInstalled>("install_modloader", { versionGuid, tag });
+export async function installModLoader(installationId: string, tag: string) {
+  return invoke<ModLoaderInstalled>("install_modloader", { installationId, tag });
 }
 
-export async function uninstallModLoader(versionGuid: string) {
-  return invoke<void>("uninstall_modloader", { versionGuid });
+export async function uninstallModLoader(installationId: string) {
+  return invoke<void>("uninstall_modloader", { installationId });
 }
 
 export function isModLoaderUpdateAvailable(

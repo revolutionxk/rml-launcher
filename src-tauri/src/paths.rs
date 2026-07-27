@@ -21,4 +21,9 @@ impl Paths {
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
     }
+
+    #[cfg(test)]
+    pub fn for_test(data_dir: PathBuf) -> Self {
+        Self { data_dir }
+    }
 }

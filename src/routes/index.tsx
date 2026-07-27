@@ -59,13 +59,12 @@ function HomePage() {
   const setupUsable = hasStudio && (hasLoader || loaderDeferred);
 
   const isLinux = host?.os === "linux";
-  const isWindows = !host || host.os === "windows";
 
-  const handleLaunch = async (versionGuid: string) => {
-    setLaunchingId(versionGuid);
+  const handleLaunch = async (installationId: string) => {
+    setLaunchingId(installationId);
     setErrorMessage(null);
     try {
-      await launchStudio(versionGuid);
+      await launchStudio(installationId);
     } catch (error) {
       setErrorMessage(
         t("instances-error-launch", {
@@ -77,8 +76,8 @@ function HomePage() {
     }
   };
 
-  const openInstance = (versionGuid: string) =>
-    navigate({ to: "/settings/instances/$versionGuid", params: { versionGuid } });
+  const openInstance = (installationId: string) =>
+    navigate({ to: "/settings/instances/$installationId", params: { installationId } });
 
   const setupSteps: SetupStep[] = (() => {
     const definitions = [
@@ -103,7 +102,7 @@ function HomePage() {
         action: {
           label: t("home-step-loader-action"),
           icon: <ShieldCheck size={14} />,
-          onClick: () => target && openInstance(target.versionGuid),
+          onClick: () => target && openInstance(target.id),
         },
         secondaryAction: {
           label: t("home-step-loader-skip"),
@@ -160,26 +159,24 @@ function HomePage() {
 
         {isLoading ? (
           <LoadingState label={t("home-loading")} />
-        ) : !isWindows ? (
-          isLinux ? (
-            <Callout
-              variant="info"
-              title={t("vinegar-studio-title")}
-              action={
-                <Button.Root
-                  variant="primary"
-                  onClick={() => navigate({ to: "/settings/instances" })}
-                >
-                  <Button.Label>{t("nav-studios")}</Button.Label>
-                  <Button.Icon>
-                    <ArrowRight size={14} />
-                  </Button.Icon>
-                </Button.Root>
-              }
-            >
-              {t("vinegar-studio-description")}
-            </Callout>
-          ) : null
+        ) : isLinux ? (
+          <Callout
+            variant="info"
+            title={t("vinegar-studio-title")}
+            action={
+              <Button.Root
+                variant="primary"
+                onClick={() => navigate({ to: "/settings/instances" })}
+              >
+                <Button.Label>{t("nav-studios")}</Button.Label>
+                <Button.Icon>
+                  <ArrowRight size={14} />
+                </Button.Icon>
+              </Button.Root>
+            }
+          >
+            {t("vinegar-studio-description")}
+          </Callout>
         ) : setupUsable && target ? (
           <ReadyDashboard
             target={target}
@@ -189,7 +186,7 @@ function HomePage() {
             hasMods={hasMods}
             onLaunch={handleLaunch}
             onConfigure={openInstance}
-            onOpenTarget={() => openInstance(target.versionGuid)}
+            onOpenTarget={() => openInstance(target.id)}
             t={t}
           />
         ) : (
@@ -219,9 +216,9 @@ function HomePage() {
                   type="button"
                   className="inline-flex items-center gap-2 rounded-sm text-[12px] text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent/40"
                   disabled={launchingId !== null}
-                  onClick={() => void handleLaunch(target.versionGuid)}
+                  onClick={() => void handleLaunch(target.id)}
                 >
-                  {launchingId === target.versionGuid ? (
+                  {launchingId === target.id ? (
                     <RefreshCw size={13} className="animate-spin" />
                   ) : (
                     <Play size={13} />
@@ -243,8 +240,8 @@ interface ReadyDashboardProps {
   launchingId: string | null;
   hasLoader: boolean;
   hasMods: boolean;
-  onLaunch: (versionGuid: string) => void;
-  onConfigure: (versionGuid: string) => void;
+  onLaunch: (installationId: string) => void;
+  onConfigure: (installationId: string) => void;
   onOpenTarget: () => void;
   t: ReturnType<typeof useI18n>["t"];
 }
@@ -292,10 +289,10 @@ function ReadyDashboard({
             variant="primary"
             className="px-5 py-2.5 text-[13px]"
             disabled={launchingId !== null}
-            onClick={() => onLaunch(target.versionGuid)}
+            onClick={() => onLaunch(target.id)}
           >
             <Button.Icon>
-              {launchingId === target.versionGuid ? (
+              {launchingId === target.id ? (
                 <RefreshCw size={15} className="animate-spin" />
               ) : (
                 <Play size={15} />
@@ -361,11 +358,11 @@ function ReadyDashboard({
           <div className="flex flex-col gap-2">
             {instances.map((instance) => (
               <InstanceRow
-                key={instance.versionGuid}
+                key={instance.id}
                 instance={instance}
-                isLaunching={launchingId === instance.versionGuid}
-                onLaunch={() => onLaunch(instance.versionGuid)}
-                onConfigure={() => onConfigure(instance.versionGuid)}
+                isLaunching={launchingId === instance.id}
+                onLaunch={() => onLaunch(instance.id)}
+                onConfigure={() => onConfigure(instance.id)}
                 t={t}
               />
             ))}

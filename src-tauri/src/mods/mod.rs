@@ -30,8 +30,8 @@ fn disabled_dir(install_dir: &Path) -> PathBuf {
 }
 
 #[tauri::command]
-pub async fn list_mods(app: AppHandle, version_guid: String) -> CommandResult<ModsResponse> {
-    let install_dir = installed_studio_target(&app, &version_guid)?;
+pub async fn list_mods(app: AppHandle, installation_id: String) -> CommandResult<ModsResponse> {
+    let install_dir = installed_studio_target(&app, &installation_id)?;
 
     Ok(tokio::task::spawn_blocking(move || list_mods_blocking(&install_dir)).await??)
 }
@@ -50,11 +50,11 @@ pub(crate) fn loader_installed(install_dir: &Path) -> bool {
 #[tauri::command]
 pub async fn set_mod_enabled(
     app: AppHandle,
-    version_guid: String,
+    installation_id: String,
     mod_id: String,
     enabled: bool,
 ) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &version_guid)?;
+    let install_dir = installed_studio_target(&app, &installation_id)?;
     let mod_id = sanitize_mod_id(&mod_id)?;
 
     Ok(
@@ -64,8 +64,8 @@ pub async fn set_mod_enabled(
 }
 
 #[tauri::command]
-pub async fn remove_mod(app: AppHandle, version_guid: String, mod_id: String) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &version_guid)?;
+pub async fn remove_mod(app: AppHandle, installation_id: String, mod_id: String) -> CommandResult<()> {
+    let install_dir = installed_studio_target(&app, &installation_id)?;
     let mod_id = sanitize_mod_id(&mod_id)?;
 
     Ok(tokio::task::spawn_blocking(move || remove_mod_blocking(&install_dir, &mod_id)).await??)
@@ -74,10 +74,10 @@ pub async fn remove_mod(app: AppHandle, version_guid: String, mod_id: String) ->
 #[tauri::command]
 pub async fn import_mod(
     app: AppHandle,
-    version_guid: String,
+    installation_id: String,
     source_path: String,
 ) -> CommandResult<ModEntry> {
-    let install_dir = installed_studio_target(&app, &version_guid)?;
+    let install_dir = installed_studio_target(&app, &installation_id)?;
 
     Ok(
         tokio::task::spawn_blocking(move || import_mod_blocking(&install_dir, Path::new(&source_path)))
@@ -86,8 +86,8 @@ pub async fn import_mod(
 }
 
 #[tauri::command]
-pub async fn open_mods_dir(app: AppHandle, version_guid: String) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &version_guid)?;
+pub async fn open_mods_dir(app: AppHandle, installation_id: String) -> CommandResult<()> {
+    let install_dir = installed_studio_target(&app, &installation_id)?;
     let dir = mods_dir(&install_dir);
 
     if !loader_installed(&install_dir) {

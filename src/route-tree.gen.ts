@@ -19,7 +19,7 @@ import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
 import { Route as SettingsAboutRouteImport } from './routes/settings/about'
 import { Route as SettingsInstancesIndexRouteImport } from './routes/settings/instances.index'
-import { Route as SettingsInstancesVersionGuidRouteImport } from './routes/settings/instances.$versionGuid'
+import { Route as SettingsInstancesInstallationIdRouteImport } from './routes/settings/instances.$installationId'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -71,10 +71,10 @@ const SettingsInstancesIndexRoute = SettingsInstancesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SettingsInstancesRoute,
 } as any)
-const SettingsInstancesVersionGuidRoute =
-  SettingsInstancesVersionGuidRouteImport.update({
-    id: '/$versionGuid',
-    path: '/$versionGuid',
+const SettingsInstancesInstallationIdRoute =
+  SettingsInstancesInstallationIdRouteImport.update({
+    id: '/$installationId',
+    path: '/$installationId',
     getParentRoute: () => SettingsInstancesRoute,
   } as any)
 
@@ -88,7 +88,7 @@ export interface FileRoutesByFullPath {
   '/settings/instances': typeof SettingsInstancesRouteWithChildren
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings/': typeof SettingsIndexRoute
-  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances/$installationId': typeof SettingsInstancesInstallationIdRoute
   '/settings/instances/': typeof SettingsInstancesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -99,7 +99,7 @@ export interface FileRoutesByTo {
   '/settings/engine': typeof SettingsEngineRoute
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings': typeof SettingsIndexRoute
-  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances/$installationId': typeof SettingsInstancesInstallationIdRoute
   '/settings/instances': typeof SettingsInstancesIndexRoute
 }
 export interface FileRoutesById {
@@ -113,7 +113,7 @@ export interface FileRoutesById {
   '/settings/instances': typeof SettingsInstancesRouteWithChildren
   '/settings/versions': typeof SettingsVersionsRoute
   '/settings/': typeof SettingsIndexRoute
-  '/settings/instances/$versionGuid': typeof SettingsInstancesVersionGuidRoute
+  '/settings/instances/$installationId': typeof SettingsInstancesInstallationIdRoute
   '/settings/instances/': typeof SettingsInstancesIndexRoute
 }
 export interface FileRouteTypes {
@@ -128,7 +128,7 @@ export interface FileRouteTypes {
     | '/settings/instances'
     | '/settings/versions'
     | '/settings/'
-    | '/settings/instances/$versionGuid'
+    | '/settings/instances/$installationId'
     | '/settings/instances/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,7 +139,7 @@ export interface FileRouteTypes {
     | '/settings/engine'
     | '/settings/versions'
     | '/settings'
-    | '/settings/instances/$versionGuid'
+    | '/settings/instances/$installationId'
     | '/settings/instances'
   id:
     | '__root__'
@@ -152,7 +152,7 @@ export interface FileRouteTypes {
     | '/settings/instances'
     | '/settings/versions'
     | '/settings/'
-    | '/settings/instances/$versionGuid'
+    | '/settings/instances/$installationId'
     | '/settings/instances/'
   fileRoutesById: FileRoutesById
 }
@@ -234,23 +234,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsInstancesIndexRouteImport
       parentRoute: typeof SettingsInstancesRoute
     }
-    '/settings/instances/$versionGuid': {
-      id: '/settings/instances/$versionGuid'
-      path: '/$versionGuid'
-      fullPath: '/settings/instances/$versionGuid'
-      preLoaderRoute: typeof SettingsInstancesVersionGuidRouteImport
+    '/settings/instances/$installationId': {
+      id: '/settings/instances/$installationId'
+      path: '/$installationId'
+      fullPath: '/settings/instances/$installationId'
+      preLoaderRoute: typeof SettingsInstancesInstallationIdRouteImport
       parentRoute: typeof SettingsInstancesRoute
     }
   }
 }
 
 interface SettingsInstancesRouteChildren {
-  SettingsInstancesVersionGuidRoute: typeof SettingsInstancesVersionGuidRoute
+  SettingsInstancesInstallationIdRoute: typeof SettingsInstancesInstallationIdRoute
   SettingsInstancesIndexRoute: typeof SettingsInstancesIndexRoute
 }
 
 const SettingsInstancesRouteChildren: SettingsInstancesRouteChildren = {
-  SettingsInstancesVersionGuidRoute: SettingsInstancesVersionGuidRoute,
+  SettingsInstancesInstallationIdRoute: SettingsInstancesInstallationIdRoute,
   SettingsInstancesIndexRoute: SettingsInstancesIndexRoute,
 }
 

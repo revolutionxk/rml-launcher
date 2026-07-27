@@ -1,13 +1,19 @@
-#[cfg(windows)]
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
 mod registry;
+#[cfg(target_os = "windows")]
+mod windows;
 
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+mod unsupported;
+
+use anyhow::Result;
 use serde::Serialize;
 
 use crate::CommandResult;
-#[cfg(not(windows))]
-use crate::AppError;
 
-const STUDIO_SCHEMES: [&str; 2] = ["roblox-studio-auth", "roblox-studio"];
+pub const STUDIO_SCHEMES: [&str; 2] = ["roblox-studio-auth", "roblox-studio"];
 
 pub fn studio_uri_from_args<I>(args: I) -> Option<String>
 where
@@ -16,7 +22,7 @@ where
     args.into_iter().find(|arg| is_studio_uri(arg))
 }
 
-fn is_studio_uri(arg: &str) -> bool {
+pub fn is_studio_uri(arg: &str) -> bool {
     let lowercased = arg.to_ascii_lowercase();
     STUDIO_SCHEMES
         .iter()
@@ -30,47 +36,41 @@ pub struct ProtocolStatus {
     pub enabled: bool,
 }
 
-impl ProtocolStatus {
-    #[cfg(windows)]
-    fn current() -> Self {
-        Self {
-            supported: true,
-            enabled: registry::is_registered().unwrap_or(false),
-        }
-    }
+pub trait ProtocolHandler {
+    fn status(&self) -> ProtocolStatus;
+    fn register(&self) -> Result<()>;
+    fn restore(&self) -> Result<()>;
+}
 
-    #[cfg(not(windows))]
-    fn current() -> Self {
-        Self {
-            supported: false,
-            enabled: false,
-        }
+fn active_handler() -> impl ProtocolHandler {
+    #[cfg(target_os = "windows")]
+    {
+        windows::WindowsProtocolHandler
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos::MacosProtocolHandler
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        unsupported::UnsupportedProtocolHandler
     }
 }
 
 #[tauri::command]
 pub fn studio_protocol_status() -> ProtocolStatus {
-    ProtocolStatus::current()
+    active_handler().status()
 }
 
 #[tauri::command]
 pub fn set_studio_protocol_handler(enabled: bool) -> CommandResult<ProtocolStatus> {
-    #[cfg(windows)]
-    {
-        if enabled {
-            registry::register()
-        } else {
-            registry::restore()
-        }?;
+    let handler = active_handler();
 
-        Ok(ProtocolStatus::current())
+    if enabled {
+        handler.register()?;
+    } else {
+        handler.restore()?;
     }
 
-    #[cfg(not(windows))]
-    {
-        let _ = enabled;
-        Err(AppError::unsupported(
-            "Opening Studio links through RML is only available on Windows.",
-        ))
-    }
+    Ok(handler.status())
 }

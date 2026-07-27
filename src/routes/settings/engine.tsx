@@ -87,7 +87,7 @@ function EngineRoute() {
 }
 
 interface EngineFlagsProps {
-  embeddedTargetVersionGuid?: string;
+  embeddedTargetInstallationId?: string;
 }
 
 const FLAG_ROW_HEIGHT = 46;
@@ -103,7 +103,7 @@ const SOURCE_DOT: Record<EngineFlagSource, string> = {
 const EMPTY_SCAN_INFO: EngineScanInfo = {
   canPatternScan: false,
   source: "unavailable",
-  targetVersionGuid: null,
+  targetInstallationId: null,
   targetVersion: null,
   lastScannedVersionGuid: null,
   lastScannedAt: null,
@@ -323,9 +323,9 @@ function ListFlagEditorModal({
   );
 }
 
-export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
+export function EngineFlags({ embeddedTargetInstallationId }: EngineFlagsProps) {
   const { t } = useI18n();
-  const embedded = embeddedTargetVersionGuid != null;
+  const embedded = embeddedTargetInstallationId != null;
   const flagsIntroDismissed = useSetupStore((s) => s.flagsIntroDismissed);
   const dismissFlagsIntro = useSetupStore((s) => s.dismissFlagsIntro);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -337,7 +337,7 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
   const [enableTracking, setEnableTracking] = useState(true);
   const [disableTelemetry, setDisableTelemetry] = useState(false);
   const [scanInfo, setScanInfo] = useState<EngineScanInfo>(EMPTY_SCAN_INFO);
-  const [selectedTargetVersionGuid, setSelectedTargetVersionGuid] = useState<string | null>(null);
+  const [selectedTargetInstallationId, setSelectedTargetInstallationId] = useState<string | null>(null);
   const [availableTargets, setAvailableTargets] = useState<EngineTargetVersionRecord[]>([]);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -403,7 +403,7 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
       setFlags(sortFlags(state.flags));
       setEnableTracking(state.enableTracking);
       setDisableTelemetry(state.disableTelemetry);
-      setSelectedTargetVersionGuid(state.selectedTargetVersionGuid);
+      setSelectedTargetInstallationId(state.selectedTargetInstallationId);
       setAvailableTargets(state.availableTargets);
       setScanInfo(state.scan);
     });
@@ -430,10 +430,10 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
     }
   };
 
-  const loadEmbeddedTarget = async (guid: string) => {
+  const loadEmbeddedTarget = async (installationId: string) => {
     setIsLoading(true);
     try {
-      const nextState = await setEngineTargetVersion(guid);
+      const nextState = await setEngineTargetVersion(installationId);
       applyEngineState(nextState);
       setErrorMessage(null);
     } catch (error) {
@@ -444,24 +444,24 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
   };
 
   useEffect(() => {
-    if (embeddedTargetVersionGuid) {
-      void loadEmbeddedTarget(embeddedTargetVersionGuid);
+    if (embeddedTargetInstallationId) {
+      void loadEmbeddedTarget(embeddedTargetInstallationId);
     } else {
       void loadState({ showLoading: true });
     }
-  }, [embeddedTargetVersionGuid]);
+  }, [embeddedTargetInstallationId]);
 
-  const handleTargetChange = async (versionGuid: string | null) => {
-    const nextTargetVersionGuid = versionGuid === "__auto__" ? null : versionGuid;
+  const handleTargetChange = async (installationId: string | null) => {
+    const nextTargetInstallationId = installationId === "__auto__" ? null : installationId;
 
-    if (nextTargetVersionGuid === selectedTargetVersionGuid) {
+    if (nextTargetInstallationId === selectedTargetInstallationId) {
       return;
     }
 
     setIsSwitchingTarget(true);
 
     try {
-      const nextState = await setEngineTargetVersion(nextTargetVersionGuid);
+      const nextState = await setEngineTargetVersion(nextTargetInstallationId);
       applyEngineState(nextState);
       setErrorMessage(null);
     } catch (error) {
@@ -723,7 +723,7 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
     if (source === "custom") return t("engine-source-custom");
     return t("engine-source-remote");
   };
-  const selectedTargetValue = selectedTargetVersionGuid ?? "__auto__";
+  const selectedTargetValue = selectedTargetInstallationId ?? "__auto__";
 
   const formatPreviewValue = (value: string) => {
     const normalized = value.trim();
@@ -979,7 +979,7 @@ export function EngineFlags({ embeddedTargetVersionGuid }: EngineFlagsProps) {
                     <Select.List>
                       <Select.Item value="__auto__">{t("engine-target-auto")}</Select.Item>
                       {availableTargets.map((target) => (
-                        <Select.Item key={target.versionGuid} value={target.versionGuid}>
+                        <Select.Item key={target.id} value={target.id}>
                           {target.isDefault
                             ? `${target.version} · ${t("engine-target-default")}`
                             : target.version}

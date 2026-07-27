@@ -260,7 +260,6 @@ instances-delete-confirm = Delete Studio { $version } and all its mods? This can
 instances-error-generic = Something went wrong.
 instances-error-launch = Could not launch this Studio: { $message }
 instances-error-delete = Could not delete this Studio: { $message }
-platform-notice-macos = macOS support is in progress — launching Studio isn't available on this platform yet.
 platform-notice-linux-vinegar = Vinegar is installed. Engine Fast Flags sync to Vinegar's config, and you can launch Studio through it.
 platform-notice-linux-no-vinegar = Roblox Studio runs through Vinegar on Linux. Install it to get started.
 vinegar-install = Install Vinegar

@@ -12,7 +12,6 @@ use tracing::info;
 use crate::{AppError, CommandResult};
 
 
-pub const INSTANCE_ID: &str = "vinegar";
 const FLATPAK_APP_ID: &str = "org.vinegarhq.Vinegar";
 const STUDIO_EXECUTABLE: &str = "RobloxStudioBeta.exe";
 

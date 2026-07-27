@@ -33,7 +33,7 @@ pub fn load_preferences(paths: &Paths) -> Result<EnginePreferences> {
             );
 
             EnginePreferences {
-                selected_target_version_guid: None,
+                selected_target_installation_id: None,
                 default_profile: legacy_profile,
                 version_profiles: Default::default(),
             }

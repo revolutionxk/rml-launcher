@@ -29,7 +29,7 @@ const MORPH_TRANSITION = {
 function matchesQuery(instance: InstanceSummary, query: string) {
   return [
     instance.version,
-    instance.versionGuid,
+    instance.id,
     instance.modloader?.name ?? "",
     instance.modloader?.channel ?? "",
   ]
@@ -70,10 +70,10 @@ function InstancesPage() {
   };
 
   const handleLaunch = async (instance: InstanceSummary) => {
-    setLaunchingId(instance.versionGuid);
+    setLaunchingId(instance.id);
     setErrorMessage(null);
     try {
-      await launchStudio(instance.versionGuid);
+      await launchStudio(instance.id);
     } catch (error) {
       setErrorMessage(
         t("instances-error-launch", {
@@ -85,8 +85,8 @@ function InstancesPage() {
     }
   };
 
-  const openInstance = (versionGuid: string) => {
-    void navigate({ to: "/settings/instances/$versionGuid", params: { versionGuid } });
+  const openInstance = (installationId: string) => {
+    void navigate({ to: "/settings/instances/$installationId", params: { installationId } });
   };
 
   if (host?.os === "linux") {
@@ -185,12 +185,12 @@ function InstancesPage() {
           <div className="grid grid-cols-1 gap-3 pb-4 min-[860px]:grid-cols-2">
             {filtered.map((instance) => (
               <InstanceCard
-                key={instance.versionGuid}
+                key={instance.id}
                 instance={instance}
-                isLaunching={launchingId === instance.versionGuid}
+                isLaunching={launchingId === instance.id}
                 hasUpdate={updateAvailableFor(instance)}
                 onLaunch={() => void handleLaunch(instance)}
-                onOpen={() => openInstance(instance.versionGuid)}
+                onOpen={() => openInstance(instance.id)}
                 t={t}
               />
             ))}
@@ -223,7 +223,7 @@ function InstanceCard({
 
   return (
     <motion.div
-      layoutId={`studio-card-${instance.versionGuid}`}
+      layoutId={`studio-card-${instance.id}`}
       transition={MORPH_TRANSITION}
       onClick={onOpen}
       className={cn(
@@ -242,7 +242,7 @@ function InstanceCard({
     >
       <div className="flex items-center gap-3">
         <motion.div
-          layoutId={`studio-avatar-${instance.versionGuid}`}
+          layoutId={`studio-avatar-${instance.id}`}
           transition={MORPH_TRANSITION}
           className={cn(
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-sm transition-colors duration-200",
@@ -255,7 +255,7 @@ function InstanceCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <motion.span
-              layoutId={`studio-title-${instance.versionGuid}`}
+              layoutId={`studio-title-${instance.id}`}
               transition={MORPH_TRANSITION}
               className="truncate text-[14px] font-semibold tracking-[-0.01em] text-text"
             >

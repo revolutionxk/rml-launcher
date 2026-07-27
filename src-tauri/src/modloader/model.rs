@@ -58,8 +58,8 @@ pub struct ModLoaderRelease {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModLoaderInstalled {
-    #[serde(default)]
-    pub version_guid: String,
+    #[serde(default, alias = "versionGuid")]
+    pub installation_id: String,
     pub tag: String,
     pub name: String,
     pub channel: ModLoaderChannel,
@@ -86,7 +86,7 @@ pub enum ModLoaderPhase {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModLoaderInstallProgress {
-    pub version_guid: String,
+    pub installation_id: String,
     pub tag: String,
     pub phase: ModLoaderPhase,
     pub downloaded_bytes: u64,

@@ -260,7 +260,6 @@ instances-delete-confirm = Excluir o Studio { $version } e todos os seus mods? I
 instances-error-generic = Algo deu errado.
 instances-error-launch = Não foi possível abrir este Studio: { $message }
 instances-error-delete = Não foi possível excluir este Studio: { $message }
-platform-notice-macos = Suporte ao macOS em andamento — abrir o Studio ainda não está disponível nesta plataforma.
 platform-notice-linux-vinegar = Vinegar instalado. As Fast Flags da engine são sincronizadas com o config do Vinegar, e você pode abrir o Studio por ele.
 platform-notice-linux-no-vinegar = No Linux, o Roblox Studio roda pelo Vinegar. Instale para começar.
 vinegar-install = Instalar Vinegar
