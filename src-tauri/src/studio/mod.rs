@@ -16,11 +16,9 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter, State};
 use tokio::{fs as tokio_fs, sync::Mutex};
-use tracing::info;
-#[cfg(not(target_os = "macos"))]
-use tracing::warn;
+use tracing::{info, warn};
 
-use crate::{AppError, CommandResult, Paths};
+use crate::{modloader::ModLoaderState, AppError, CommandResult, Paths};
 
 use self::{
     config::{CURRENT_CHANNEL, STUDIO_INSTALL_EVENT},
@@ -90,7 +88,7 @@ pub(crate) fn installed_studio_target(app: &AppHandle, installation_id: &str) ->
     Ok(resolve_installation(app, installation_id)?.install_dir)
 }
 
-fn resolve_installation(app: &AppHandle, installation_id: &str) -> Result<StudioInstallation> {
+pub(crate) fn resolve_installation(app: &AppHandle, installation_id: &str) -> Result<StudioInstallation> {
     let paths = Paths::resolve(app)?;
 
     installation::resolve(&paths, installation_id)
@@ -106,7 +104,14 @@ fn require(installation: &StudioInstallation, capability: Capabilities) -> Resul
 }
 
 #[tauri::command]
-pub async fn list_studio_versions(app: AppHandle) -> CommandResult<StudioVersionsResponse> {
+pub async fn list_studio_versions(
+    app: AppHandle,
+    loader: State<'_, ModLoaderState>,
+) -> CommandResult<StudioVersionsResponse> {
+    if let Err(error) = crate::modloader::reapply_missing(&app, &loader).await {
+        warn!(%error, "failed to reapply the mod loader to updated Studio installations");
+    }
+
     Ok(list_studio_versions_inner(&app).await?)
 }
 
@@ -186,20 +191,24 @@ pub async fn set_default_studio_version(
 #[tauri::command]
 pub async fn launch_studio(
     app: AppHandle,
+    loader: State<'_, ModLoaderState>,
     installation_id: String,
     uri: Option<String>,
 ) -> CommandResult<()> {
-    Ok(launch_studio_inner(&app, &installation_id, uri.as_deref()).await?)
+    Ok(launch_studio_inner(&app, &loader, &installation_id, uri.as_deref()).await?)
 }
 
 async fn launch_studio_inner(
     app: &AppHandle,
+    loader: &ModLoaderState,
     installation_id: &str,
     uri: Option<&str>,
 ) -> Result<()> {
     let paths = Paths::resolve(app)?;
     let installation = resolve_installation(app, installation_id)?;
     require(&installation, Capabilities::LAUNCH)?;
+
+    crate::modloader::reapply_to(app, loader, &installation).await?;
 
     if installation.capabilities.contains(Capabilities::ENGINE_FLAGS) {
         apply_saved_preferences_to_install_dir(&paths, &installation.install_dir).await?;

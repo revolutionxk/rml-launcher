@@ -3,6 +3,7 @@ mod api;
 mod installer;
 mod model;
 mod paths;
+mod reconcile;
 mod storage;
 
 use std::path::Path;
@@ -11,14 +12,17 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::{studio::installed_studio_target, AppError, CommandResult, Paths};
+use crate::{
+    studio::{installation::{InstallationSource, StudioInstallation}, resolve_installation},
+    AppError, CommandResult, Paths,
+};
 
 use self::{
     activation::{activation, ActivationContext},
     installer::{install_release, remove_from_install_dir, InstallProgressSink, INSTALL_EVENT},
-    model::ModLoaderInstallProgress,
+    model::{ModLoaderInstallProgress, ModLoaderPayload},
     paths::release_cache_dir,
-    storage::{load_manifest, remove_manifest},
+    storage::{load_manifest, load_subscriptions, remove_manifest, save_subscriptions},
 };
 
 pub use self::model::{ModLoaderInstalled, ModLoaderRelease};
@@ -48,9 +52,9 @@ pub async fn get_modloader_status(
     app: AppHandle,
     installation_id: String,
 ) -> CommandResult<Option<ModLoaderInstalled>> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let installation = resolve_installation(&app, &installation_id)?;
 
-    Ok(load_manifest(&install_dir)?)
+    Ok(load_manifest(&installation.install_dir)?)
 }
 
 #[tauri::command]
@@ -67,14 +71,17 @@ pub async fn install_modloader(
 
     info!(installation_id, tag, "installing mod loader release into Studio version");
 
-    let install_dir = installed_studio_target(&app, &installation_id)?;
-    let release = api::fetch_release(&tag).await?;
-    let cache_dir = release_cache_dir(&Paths::resolve(&app)?, &release.tag);
+    let paths = Paths::resolve(&app)?;
+    let installation = resolve_installation(&app, &installation_id)?;
+    let install_dir = installation.install_dir.clone();
+    let payload = api::fetch_release(&tag).await?.payload();
+    let cache_dir = release_cache_dir(&paths, &payload.tag);
 
     let sink = EventSink { app: &app };
-    let manifest = install_release(&sink, cache_dir, &release, &installation_id, &install_dir).await?;
+    let manifest = install_release(&sink, cache_dir, &payload, &installation_id, &install_dir).await?;
 
     activate_loader(&installation_id, &install_dir).await?;
+    subscribe(&paths, installation.source, payload).await?;
 
     Ok(manifest)
 }
@@ -90,7 +97,11 @@ pub async fn uninstall_modloader(
         .try_lock()
         .map_err(|_| AppError::Failed("A mod loader operation is already in progress.".into()))?;
 
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let paths = Paths::resolve(&app)?;
+    let installation = resolve_installation(&app, &installation_id)?;
+    let install_dir = installation.install_dir.clone();
+
+    unsubscribe(&paths, installation.source).await?;
 
     let Some(manifest) = load_manifest(&install_dir)? else {
         return Ok(());
@@ -102,6 +113,45 @@ pub async fn uninstall_modloader(
     remove_manifest(&install_dir).await?;
 
     info!(installation_id, tag = %manifest.tag, "mod loader uninstalled from Studio version");
+
+    Ok(())
+}
+
+pub(crate) async fn reapply_missing(app: &AppHandle, state: &ModLoaderState) -> Result<(), AppError> {
+    let Ok(_guard) = state.install_lock.try_lock() else {
+        return Ok(());
+    };
+
+    reconcile::reapply_missing(app).await
+}
+
+pub(crate) async fn reapply_to(
+    app: &AppHandle,
+    state: &ModLoaderState,
+    installation: &StudioInstallation,
+) -> Result<(), AppError> {
+    let _guard = state
+        .install_lock
+        .try_lock()
+        .map_err(|_| AppError::Failed("A mod loader operation is already in progress.".into()))?;
+
+    reconcile::reapply_to(app, installation).await
+}
+
+async fn subscribe(paths: &Paths, source: InstallationSource, payload: ModLoaderPayload) -> Result<(), AppError> {
+    let mut subscriptions = load_subscriptions(paths)?;
+    subscriptions.insert(source.slug().to_string(), payload);
+    save_subscriptions(paths, &subscriptions).await?;
+
+    Ok(())
+}
+
+async fn unsubscribe(paths: &Paths, source: InstallationSource) -> Result<(), AppError> {
+    let mut subscriptions = load_subscriptions(paths)?;
+
+    if subscriptions.remove(source.slug()).is_some() {
+        save_subscriptions(paths, &subscriptions).await?;
+    }
 
     Ok(())
 }

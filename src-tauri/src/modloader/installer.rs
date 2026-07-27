@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 use super::{
     api::{ensure_trusted_download, http_client, send_download_request},
-    model::{ModLoaderInstallProgress, ModLoaderInstalled, ModLoaderPhase, ModLoaderRelease},
+    model::{ModLoaderInstallProgress, ModLoaderInstalled, ModLoaderPayload, ModLoaderPhase},
     storage::save_manifest,
 };
 
@@ -27,7 +27,7 @@ pub trait InstallProgressSink {
 pub async fn install_release<S: InstallProgressSink>(
     sink: &S,
     cache_dir: PathBuf,
-    release: &ModLoaderRelease,
+    release: &ModLoaderPayload,
     installation_id: &str,
     install_dir: &Path,
 ) -> Result<ModLoaderInstalled> {
@@ -103,7 +103,7 @@ pub async fn remove_from_install_dir(install_dir: &Path, artifacts: &[String]) -
 
 async fn download_bundle<S: InstallProgressSink>(
     bundle_path: &Path,
-    release: &ModLoaderRelease,
+    release: &ModLoaderPayload,
     reporter: &ProgressReporter<'_, S>,
 ) -> Result<()> {
     if bundle_path.exists() && verify_bundle(bundle_path, release).await.is_ok() {
@@ -174,7 +174,7 @@ async fn download_bundle<S: InstallProgressSink>(
     Ok(())
 }
 
-async fn verify_bundle(bundle_path: &Path, release: &ModLoaderRelease) -> Result<()> {
+async fn verify_bundle(bundle_path: &Path, release: &ModLoaderPayload) -> Result<()> {
     let bundle_path = bundle_path.to_path_buf();
     let expected_size = release.asset.size;
     let expected_sha = release.asset.sha256.clone();

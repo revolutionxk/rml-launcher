@@ -14,6 +14,10 @@ pub fn release_cache_dir(paths: &Paths, tag: &str) -> PathBuf {
     cache_dir(paths).join(sanitize_tag(tag))
 }
 
+pub fn subscriptions_path(paths: &Paths) -> PathBuf {
+    modloader_root_dir(paths).join("subscriptions.json")
+}
+
 pub fn version_manifest_path(install_dir: &Path) -> PathBuf {
     install_dir.join("rml-modloader.json")
 }

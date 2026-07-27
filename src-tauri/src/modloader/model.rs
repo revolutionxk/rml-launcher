@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,16 +30,27 @@ impl ModLoaderChannel {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModLoaderAsset {
     pub name: String,
     pub size: u64,
     pub download_url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     pub updated_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModLoaderPayload {
+    pub tag: String,
+    pub name: String,
+    pub channel: ModLoaderChannel,
+    pub asset: ModLoaderAsset,
+}
+
+pub type ModLoaderSubscriptions = BTreeMap<String, ModLoaderPayload>;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +66,17 @@ pub struct ModLoaderRelease {
     pub asset: ModLoaderAsset,
     pub is_installed: bool,
     pub update_available: bool,
+}
+
+impl ModLoaderRelease {
+    pub fn payload(&self) -> ModLoaderPayload {
+        ModLoaderPayload {
+            tag: self.tag.clone(),
+            name: self.name.clone(),
+            channel: self.channel,
+            asset: self.asset.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
