@@ -243,7 +243,8 @@ pub async fn revalidate_studio_version(
 
         let downloads_root = downloads_dir(&paths);
         let manifest =
-            revalidate_version(installation.install_dir, downloads_root, &version_guid).await?;
+            revalidate_version(installation.install_dir.clone(), downloads_root, &version_guid)
+                .await?;
         let install_dir = version_install_dir(&paths, &manifest.version_guid);
         let executable_path = version_executable_path(&install_dir);
 

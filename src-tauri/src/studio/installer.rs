@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 use super::{
     api::{fetch_package_manifest, http_client, package_url, send_get_request_with_retry},
     config::{binary_target, package_extract_root, APP_SETTINGS_XML, OAUTH2_CONFIG_JSON},
-    model::{InstallPhase, InstalledStudioManifest, PackageManifestEntry, StudioInstallProgress},
+    model::{InstallPhase, InstalledStudioManifest, PackageManifestEntry},
     paths::{version_executable_path, version_manifest_path},
     storage::{read_installed_manifest, write_installed_manifest},
 };
