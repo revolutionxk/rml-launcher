@@ -7,6 +7,7 @@ use tracing::info;
 use super::{codesign, macho, ActivationContext, LoaderActivation};
 
 const LOADER_LIBRARY: &str = "roblox_modloader.dylib";
+const LOAD_PATH: &str = "@executable_path/roblox_modloader.dylib";
 const BACKUP_SUFFIX: &str = ".rml-backup";
 
 pub struct MacosActivation;
@@ -16,24 +17,17 @@ impl LoaderActivation for MacosActivation {
         info!(installation_id = context.installation_id, "activating the mod loader for Studio version");
         let bundle = locate_bundle(context.install_dir)?;
         let binary = main_binary(&bundle)?;
-        let loader = loader_library_path(context.install_dir)?;
+        let backup = backup_path(&binary);
+        let source = loader_source(context.install_dir)?;
 
-        if is_loaded(&binary, &loader)? {
-            info!(bundle = %bundle.display(), "mod loader already inserted into Studio; nothing to do");
-            return Ok(());
-        }
+        back_up_once(&binary, &backup)?;
+        install_loader(&source, &bundle)?;
+        insert_load_command(&binary, &backup)?;
 
-        back_up_once(&binary)?;
+        codesign::resign_bundle(&bundle, &backup, codesign::Mode::Unlock)?;
+        verify(&bundle, &binary)?;
 
-        let original = fs::read(&binary).with_context(|| format!("failed to read {}", binary.display()))?;
-        let loader_name = loader.to_str().context("the mod loader path is not valid UTF-8")?;
-        let patched = macho::insert_load_dylib(&original, loader_name).with_context(|| format!("failed to insert the load command into {}", binary.display()))?;
-
-        fs::write(&binary, &patched).with_context(|| format!("failed to write {}", binary.display()))?;
-
-        codesign::resign_bundle(&bundle, &binary, true)?;
-
-        info!(bundle = %bundle.display(), loader = %loader.display(), "mod loader inserted and Studio re-signed");
+        info!(bundle = %bundle.display(), loader = %source.display(), "mod loader inserted and Studio re-signed");
         Ok(())
     }
 
@@ -49,8 +43,9 @@ impl LoaderActivation for MacosActivation {
         }
 
         fs::rename(&backup, &binary).with_context(|| format!("failed to restore {} from {}", binary.display(), backup.display()))?;
+        remove_loader(&bundle)?;
 
-        codesign::resign_bundle(&bundle, &binary, false)?;
+        codesign::resign_bundle(&bundle, &binary, codesign::Mode::Lock)?;
 
         info!(bundle = %bundle.display(), "mod loader removed from Studio and bundle re-signed");
         Ok(())
@@ -90,30 +85,63 @@ fn main_binary(bundle: &Path) -> Result<PathBuf> {
     Ok(bundle.join("Contents/MacOS").join(executable))
 }
 
-fn loader_library_path(install_dir: &Path) -> Result<PathBuf> {
+fn loader_source(install_dir: &Path) -> Result<PathBuf> {
     let path = install_dir.join(LOADER_LIBRARY);
 
     fs::canonicalize(&path).with_context(|| format!("the mod loader library is missing: {}", path.display()))
 }
 
-fn is_loaded(binary: &Path, loader: &Path) -> Result<bool> {
-    let bytes = fs::read(binary).with_context(|| format!("failed to read {}", binary.display()))?;
-    let loader_name = loader.to_str().context("the mod loader path is not valid UTF-8")?;
-
-    Ok(macho::loaded_dylibs(&bytes)
-        .with_context(|| format!("failed to read the load commands of {}", binary.display()))?
-        .iter()
-        .any(|loaded| loaded == loader_name))
+fn loader_destination(bundle: &Path) -> PathBuf {
+    bundle.join("Contents/MacOS").join(LOADER_LIBRARY)
 }
 
-fn back_up_once(binary: &Path) -> Result<()> {
-    let backup = backup_path(binary);
+fn install_loader(source: &Path, bundle: &Path) -> Result<()> {
+    let destination = loader_destination(bundle);
 
+    fs::copy(source, &destination)
+        .with_context(|| format!("failed to copy {} to {}", source.display(), destination.display()))?;
+
+    codesign::sign_ad_hoc(&destination)
+}
+
+fn remove_loader(bundle: &Path) -> Result<()> {
+    let destination = loader_destination(bundle);
+
+    if !destination.exists() {
+        return Ok(());
+    }
+
+    fs::remove_file(&destination).with_context(|| format!("failed to remove {}", destination.display()))
+}
+
+fn insert_load_command(binary: &Path, backup: &Path) -> Result<()> {
+    let original = fs::read(backup).with_context(|| format!("failed to read {}", backup.display()))?;
+    let patched = macho::insert_load_dylib(&original, LOAD_PATH)
+        .with_context(|| format!("failed to insert the load command into {}", binary.display()))?;
+
+    fs::write(binary, &patched).with_context(|| format!("failed to write {}", binary.display()))
+}
+
+fn verify(bundle: &Path, binary: &Path) -> Result<()> {
+    codesign::verify(bundle)?;
+
+    let bytes = fs::read(binary).with_context(|| format!("failed to read {}", binary.display()))?;
+    let loaded = macho::loaded_dylibs(&bytes)
+        .with_context(|| format!("failed to read the load commands of {}", binary.display()))?;
+
+    if !loaded.iter().any(|dylib| dylib == LOAD_PATH) {
+        bail!("{} does not list the mod loader as a dependency", binary.display());
+    }
+
+    Ok(())
+}
+
+fn back_up_once(binary: &Path, backup: &Path) -> Result<()> {
     if backup.exists() {
         return Ok(());
     }
 
-    fs::copy(binary, &backup).with_context(|| format!("failed to back up {} to {}", binary.display(), backup.display()))?;
+    fs::copy(binary, backup).with_context(|| format!("failed to back up {} to {}", binary.display(), backup.display()))?;
     Ok(())
 }
 
