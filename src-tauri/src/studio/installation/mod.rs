@@ -11,7 +11,9 @@ use tracing::warn;
 
 use crate::Paths;
 
-pub(crate) use model::{Capabilities, InstallationSource, StudioInstallation};
+pub(crate) use model::{Capabilities, InstallationId, InstallationSource, StudioInstallation};
+#[cfg(target_os = "linux")]
+pub(crate) use vinegar::installation_id as vinegar_installation_id;
 
 pub(crate) trait InstallationProvider: Send + Sync {
     fn source(&self) -> InstallationSource;
