@@ -51,7 +51,7 @@ fn pending<'a>(
     installations
         .iter()
         .filter(|installation| installation.capabilities.contains(Capabilities::MODS))
-        .filter(|installation| !has_manifest(&installation.install_dir))
+        .filter(|installation| !has_manifest(&installation.payload_dir()))
         .filter_map(|installation| {
             subscriptions
                 .get(installation.source.slug())
@@ -76,12 +76,18 @@ async fn reapply(
         "reapplying the mod loader to a Studio installation that no longer has it"
     );
 
-    let installation_id = installation.id.as_str();
     let cache_dir = release_cache_dir(paths, &payload.tag);
     let sink = EventSink { app };
 
-    install_release(&sink, cache_dir, payload, installation_id, &installation.install_dir).await?;
-    activate_loader(installation_id, &installation.install_dir).await?;
+    install_release(
+        &sink,
+        cache_dir,
+        payload,
+        installation.id.as_str(),
+        &installation.payload_dir(),
+    )
+    .await?;
+    activate_loader(installation).await?;
 
     Ok(())
 }

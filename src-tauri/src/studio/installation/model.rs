@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -107,6 +107,13 @@ impl StudioInstallation {
             capabilities: Capabilities::DETECTED,
         }
     }
+
+    pub fn payload_dir(&self) -> PathBuf {
+        self.executable
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.install_dir.clone())
+    }
 }
 
 #[cfg(test)]
@@ -132,6 +139,32 @@ mod tests {
 
         let unique: std::collections::HashSet<_> = slugs.iter().collect();
         assert_eq!(unique.len(), slugs.len());
+    }
+
+    #[test]
+    fn the_payload_lands_next_to_the_studio_executable() {
+        let bundle = PathBuf::from("/Applications/RobloxStudio.app");
+        let installation = StudioInstallation::new(
+            InstallationSource::MacBundle,
+            "studio",
+            bundle.clone(),
+            bundle.join("Contents/MacOS/RobloxStudio"),
+        );
+
+        assert_eq!(installation.payload_dir(), bundle.join("Contents/MacOS"));
+    }
+
+    #[test]
+    fn a_windows_version_directory_is_its_own_payload_dir() {
+        let dir = PathBuf::from("/Roblox/Versions/version-abc");
+        let installation = StudioInstallation::new(
+            InstallationSource::RobloxOfficial,
+            "version-abc",
+            dir.clone(),
+            dir.join("RobloxStudioBeta.exe"),
+        );
+
+        assert_eq!(installation.payload_dir(), dir);
     }
 
     #[test]

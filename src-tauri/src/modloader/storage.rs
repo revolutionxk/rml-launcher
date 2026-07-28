@@ -11,8 +11,8 @@ use super::{
     paths::{subscriptions_path, version_manifest_path},
 };
 
-pub fn load_manifest(install_dir: &Path) -> Result<Option<ModLoaderInstalled>> {
-    read_json(&version_manifest_path(install_dir))
+pub fn load_manifest(payload_dir: &Path) -> Result<Option<ModLoaderInstalled>> {
+    read_json(&version_manifest_path(payload_dir))
 }
 
 pub fn load_subscriptions(paths: &Paths) -> Result<ModLoaderSubscriptions> {
@@ -23,12 +23,12 @@ pub async fn save_subscriptions(paths: &Paths, subscriptions: &ModLoaderSubscrip
     write_json(&subscriptions_path(paths), subscriptions).await
 }
 
-pub async fn save_manifest(install_dir: &Path, manifest: &ModLoaderInstalled) -> Result<()> {
-    write_json(&version_manifest_path(install_dir), manifest).await
+pub async fn save_manifest(payload_dir: &Path, manifest: &ModLoaderInstalled) -> Result<()> {
+    write_json(&version_manifest_path(payload_dir), manifest).await
 }
 
-pub async fn remove_manifest(install_dir: &Path) -> Result<()> {
-    let path = version_manifest_path(install_dir);
+pub async fn remove_manifest(payload_dir: &Path) -> Result<()> {
+    let path = version_manifest_path(payload_dir);
 
     if path.exists() {
         tokio_fs::remove_file(&path)

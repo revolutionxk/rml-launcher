@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use tauri::AppHandle;
@@ -29,9 +29,9 @@ pub async fn list_instances(app: AppHandle) -> CommandResult<Vec<InstanceSummary
 }
 
 fn build_summary(studio: StudioVersionEntry) -> InstanceSummary {
-    let install_dir = studio.install_dir.as_deref().map(PathBuf::from);
+    let payload_dir = payload_dir(&studio);
 
-    let (modloader, mods_enabled, mods_total) = match install_dir.as_deref() {
+    let (modloader, mods_enabled, mods_total) = match payload_dir.as_deref() {
         Some(dir) => {
             let (enabled, total) = count_mods(dir);
             (installed_manifest(dir), enabled, total)
@@ -45,4 +45,13 @@ fn build_summary(studio: StudioVersionEntry) -> InstanceSummary {
         mods_total,
         mods_enabled,
     }
+}
+
+fn payload_dir(studio: &StudioVersionEntry) -> Option<PathBuf> {
+    studio
+        .executable_path
+        .as_deref()
+        .map(PathBuf::from)
+        .and_then(|executable| executable.parent().map(Path::to_path_buf))
+        .or_else(|| studio.install_dir.as_deref().map(PathBuf::from))
 }

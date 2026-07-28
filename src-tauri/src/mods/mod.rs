@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use tauri::AppHandle;
 use tracing::info;
 
-use crate::{studio::installed_studio_target, AppError, CommandResult};
+use crate::{studio::loader_payload_dir, AppError, CommandResult};
 
 pub use self::model::{ModEntry, ModsResponse};
 
@@ -17,34 +17,34 @@ const MODLOADER_DIR: &str = "RobloxModLoader";
 const MODS_DIR: &str = "mods";
 const DISABLED_DIR: &str = "disabled-mods";
 
-fn modloader_dir(install_dir: &Path) -> PathBuf {
-    install_dir.join(MODLOADER_DIR)
+fn modloader_dir(payload_dir: &Path) -> PathBuf {
+    payload_dir.join(MODLOADER_DIR)
 }
 
-fn mods_dir(install_dir: &Path) -> PathBuf {
-    modloader_dir(install_dir).join(MODS_DIR)
+fn mods_dir(payload_dir: &Path) -> PathBuf {
+    modloader_dir(payload_dir).join(MODS_DIR)
 }
 
-fn disabled_dir(install_dir: &Path) -> PathBuf {
-    modloader_dir(install_dir).join(DISABLED_DIR)
+fn disabled_dir(payload_dir: &Path) -> PathBuf {
+    modloader_dir(payload_dir).join(DISABLED_DIR)
 }
 
 #[tauri::command]
 pub async fn list_mods(app: AppHandle, installation_id: String) -> CommandResult<ModsResponse> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let payload_dir = loader_payload_dir(&app, &installation_id)?;
 
-    Ok(tokio::task::spawn_blocking(move || list_mods_blocking(&install_dir)).await??)
+    Ok(tokio::task::spawn_blocking(move || list_mods_blocking(&payload_dir)).await??)
 }
 
-pub(crate) fn count_mods(install_dir: &Path) -> (usize, usize) {
-    let enabled = count_dir_children(&mods_dir(install_dir));
-    let disabled = count_dir_children(&disabled_dir(install_dir));
+pub(crate) fn count_mods(payload_dir: &Path) -> (usize, usize) {
+    let enabled = count_dir_children(&mods_dir(payload_dir));
+    let disabled = count_dir_children(&disabled_dir(payload_dir));
 
     (enabled, enabled + disabled)
 }
 
-pub(crate) fn loader_installed(install_dir: &Path) -> bool {
-    modloader_dir(install_dir).is_dir() || install_dir.join("rml-modloader.json").is_file()
+pub(crate) fn loader_installed(payload_dir: &Path) -> bool {
+    modloader_dir(payload_dir).is_dir() || payload_dir.join("rml-modloader.json").is_file()
 }
 
 #[tauri::command]
@@ -54,21 +54,21 @@ pub async fn set_mod_enabled(
     mod_id: String,
     enabled: bool,
 ) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let payload_dir = loader_payload_dir(&app, &installation_id)?;
     let mod_id = sanitize_mod_id(&mod_id)?;
 
     Ok(
-        tokio::task::spawn_blocking(move || set_mod_enabled_blocking(&install_dir, &mod_id, enabled))
+        tokio::task::spawn_blocking(move || set_mod_enabled_blocking(&payload_dir, &mod_id, enabled))
             .await??,
     )
 }
 
 #[tauri::command]
 pub async fn remove_mod(app: AppHandle, installation_id: String, mod_id: String) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let payload_dir = loader_payload_dir(&app, &installation_id)?;
     let mod_id = sanitize_mod_id(&mod_id)?;
 
-    Ok(tokio::task::spawn_blocking(move || remove_mod_blocking(&install_dir, &mod_id)).await??)
+    Ok(tokio::task::spawn_blocking(move || remove_mod_blocking(&payload_dir, &mod_id)).await??)
 }
 
 #[tauri::command]
@@ -77,20 +77,20 @@ pub async fn import_mod(
     installation_id: String,
     source_path: String,
 ) -> CommandResult<ModEntry> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
+    let payload_dir = loader_payload_dir(&app, &installation_id)?;
 
     Ok(
-        tokio::task::spawn_blocking(move || import_mod_blocking(&install_dir, Path::new(&source_path)))
+        tokio::task::spawn_blocking(move || import_mod_blocking(&payload_dir, Path::new(&source_path)))
             .await??,
     )
 }
 
 #[tauri::command]
 pub async fn open_mods_dir(app: AppHandle, installation_id: String) -> CommandResult<()> {
-    let install_dir = installed_studio_target(&app, &installation_id)?;
-    let dir = mods_dir(&install_dir);
+    let payload_dir = loader_payload_dir(&app, &installation_id)?;
+    let dir = mods_dir(&payload_dir);
 
-    if !loader_installed(&install_dir) {
+    if !loader_installed(&payload_dir) {
         return Err(AppError::Failed(
             "Install the mod loader for this version first.".into(),
         ));
@@ -101,12 +101,12 @@ pub async fn open_mods_dir(app: AppHandle, installation_id: String) -> CommandRe
     Ok(crate::platform::reveal_path(&dir)?)
 }
 
-fn list_mods_blocking(install_dir: &Path) -> Result<ModsResponse> {
-    let loader_installed = loader_installed(install_dir);
+fn list_mods_blocking(payload_dir: &Path) -> Result<ModsResponse> {
+    let loader_installed = loader_installed(payload_dir);
     let mut mods = Vec::new();
 
-    collect_mods(&mods_dir(install_dir), true, &mut mods)?;
-    collect_mods(&disabled_dir(install_dir), false, &mut mods)?;
+    collect_mods(&mods_dir(payload_dir), true, &mut mods)?;
+    collect_mods(&disabled_dir(payload_dir), false, &mut mods)?;
 
     mods.sort_by_key(|entry| entry.name.to_lowercase());
 
@@ -193,11 +193,11 @@ fn count_dir_children(dir: &Path) -> usize {
         .count()
 }
 
-fn set_mod_enabled_blocking(install_dir: &Path, mod_id: &str, enabled: bool) -> Result<()> {
+fn set_mod_enabled_blocking(payload_dir: &Path, mod_id: &str, enabled: bool) -> Result<()> {
     let (from, to) = if enabled {
-        (disabled_dir(install_dir).join(mod_id), mods_dir(install_dir).join(mod_id))
+        (disabled_dir(payload_dir).join(mod_id), mods_dir(payload_dir).join(mod_id))
     } else {
-        (mods_dir(install_dir).join(mod_id), disabled_dir(install_dir).join(mod_id))
+        (mods_dir(payload_dir).join(mod_id), disabled_dir(payload_dir).join(mod_id))
     };
 
     if !from.is_dir() {
@@ -220,8 +220,8 @@ fn set_mod_enabled_blocking(install_dir: &Path, mod_id: &str, enabled: bool) -> 
     Ok(())
 }
 
-fn remove_mod_blocking(install_dir: &Path, mod_id: &str) -> Result<()> {
-    let candidates = [mods_dir(install_dir).join(mod_id), disabled_dir(install_dir).join(mod_id)];
+fn remove_mod_blocking(payload_dir: &Path, mod_id: &str) -> Result<()> {
+    let candidates = [mods_dir(payload_dir).join(mod_id), disabled_dir(payload_dir).join(mod_id)];
     let mut removed = false;
 
     for candidate in candidates {
@@ -241,12 +241,12 @@ fn remove_mod_blocking(install_dir: &Path, mod_id: &str) -> Result<()> {
     Ok(())
 }
 
-fn import_mod_blocking(install_dir: &Path, source: &Path) -> Result<ModEntry> {
-    if !loader_installed(install_dir) {
+fn import_mod_blocking(payload_dir: &Path, source: &Path) -> Result<ModEntry> {
+    if !loader_installed(payload_dir) {
         bail!("Install the mod loader for this version first.");
     }
 
-    let mods_dir = mods_dir(install_dir);
+    let mods_dir = mods_dir(payload_dir);
     fs::create_dir_all(&mods_dir).with_context(|| format!("failed to create {}", mods_dir.display()))?;
 
     let is_zip = source

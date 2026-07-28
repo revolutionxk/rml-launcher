@@ -17,6 +17,7 @@ mod windows;
 pub struct ActivationContext<'a> {
     pub installation_id: &'a str,
     pub install_dir: &'a Path,
+    pub payload_dir: &'a Path,
 }
 
 pub trait LoaderActivation {

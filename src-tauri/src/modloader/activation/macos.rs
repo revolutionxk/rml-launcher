@@ -18,7 +18,7 @@ impl LoaderActivation for MacosActivation {
         let bundle = locate_bundle(context.install_dir)?;
         let binary = main_binary(&bundle)?;
         let backup = backup_path(&binary);
-        let source = loader_source(context.install_dir)?;
+        let source = loader_source(context.payload_dir)?;
 
         back_up_once(&binary, &backup)?;
         install_loader(&source, &bundle)?;
@@ -53,6 +53,10 @@ impl LoaderActivation for MacosActivation {
 }
 
 fn locate_bundle(install_dir: &Path) -> Result<PathBuf> {
+    if is_bundle(install_dir) {
+        return Ok(install_dir.to_path_buf());
+    }
+
     let preferred = install_dir.join("RobloxStudio.app");
     if preferred.is_dir() {
         return Ok(preferred);
@@ -71,6 +75,10 @@ fn locate_bundle(install_dir: &Path) -> Result<PathBuf> {
     }
 }
 
+fn is_bundle(path: &Path) -> bool {
+    path.is_dir() && path.extension().is_some_and(|extension| extension == "app")
+}
+
 fn main_binary(bundle: &Path) -> Result<PathBuf> {
     let info_plist = bundle.join("Contents/Info.plist");
     let info = plist::Value::from_file(&info_plist)
@@ -85,8 +93,8 @@ fn main_binary(bundle: &Path) -> Result<PathBuf> {
     Ok(bundle.join("Contents/MacOS").join(executable))
 }
 
-fn loader_source(install_dir: &Path) -> Result<PathBuf> {
-    let path = install_dir.join(LOADER_LIBRARY);
+fn loader_source(payload_dir: &Path) -> Result<PathBuf> {
+    let path = payload_dir.join(LOADER_LIBRARY);
 
     fs::canonicalize(&path).with_context(|| format!("the mod loader library is missing: {}", path.display()))
 }
@@ -98,8 +106,10 @@ fn loader_destination(bundle: &Path) -> PathBuf {
 fn install_loader(source: &Path, bundle: &Path) -> Result<()> {
     let destination = loader_destination(bundle);
 
-    fs::copy(source, &destination)
-        .with_context(|| format!("failed to copy {} to {}", source.display(), destination.display()))?;
+    if fs::canonicalize(&destination).ok().as_deref() != Some(source) {
+        fs::copy(source, &destination)
+            .with_context(|| format!("failed to copy {} to {}", source.display(), destination.display()))?;
+    }
 
     codesign::sign_ad_hoc(&destination)
 }
@@ -149,4 +159,47 @@ fn backup_path(binary: &Path) -> PathBuf {
     let mut name = binary.as_os_str().to_os_string();
     name.push(BACKUP_SUFFIX);
     PathBuf::from(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rml-activation-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_detected_installation_whose_dir_is_the_bundle_resolves_to_itself() {
+        let root = scratch("bundle");
+        let bundle = root.join("RobloxStudio.app");
+        fs::create_dir_all(bundle.join("Contents/MacOS")).unwrap();
+
+        assert_eq!(locate_bundle(&bundle).unwrap(), bundle);
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_managed_installation_resolves_to_the_bundle_it_contains() {
+        let root = scratch("contained");
+        let bundle = root.join("RobloxStudio.app");
+        fs::create_dir_all(&bundle).unwrap();
+
+        assert_eq!(locate_bundle(&root).unwrap(), bundle);
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_directory_holding_no_bundle_is_rejected() {
+        let root = scratch("empty");
+
+        assert!(locate_bundle(&root).is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
 }

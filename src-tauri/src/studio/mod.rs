@@ -84,8 +84,8 @@ pub(crate) fn installed_instances(app: &AppHandle) -> Result<Vec<StudioVersionEn
     Ok(versions)
 }
 
-pub(crate) fn installed_studio_target(app: &AppHandle, installation_id: &str) -> Result<PathBuf> {
-    Ok(resolve_installation(app, installation_id)?.install_dir)
+pub(crate) fn loader_payload_dir(app: &AppHandle, installation_id: &str) -> Result<PathBuf> {
+    Ok(resolve_installation(app, installation_id)?.payload_dir())
 }
 
 pub(crate) fn resolve_installation(app: &AppHandle, installation_id: &str) -> Result<StudioInstallation> {

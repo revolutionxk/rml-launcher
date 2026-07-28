@@ -18,8 +18,8 @@ pub fn subscriptions_path(paths: &Paths) -> PathBuf {
     modloader_root_dir(paths).join("subscriptions.json")
 }
 
-pub fn version_manifest_path(install_dir: &Path) -> PathBuf {
-    install_dir.join("rml-modloader.json")
+pub fn version_manifest_path(payload_dir: &Path) -> PathBuf {
+    payload_dir.join("rml-modloader.json")
 }
 
 fn sanitize_tag(tag: &str) -> String {

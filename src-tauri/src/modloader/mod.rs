@@ -19,7 +19,7 @@ use crate::{
 
 use self::{
     activation::{activation, ActivationContext},
-    installer::{install_release, remove_from_install_dir, InstallProgressSink, INSTALL_EVENT},
+    installer::{install_release, remove_payload, InstallProgressSink, INSTALL_EVENT},
     model::{ModLoaderInstallProgress, ModLoaderPayload},
     paths::release_cache_dir,
     storage::{load_manifest, load_subscriptions, remove_manifest, save_subscriptions},
@@ -54,7 +54,7 @@ pub async fn get_modloader_status(
 ) -> CommandResult<Option<ModLoaderInstalled>> {
     let installation = resolve_installation(&app, &installation_id)?;
 
-    Ok(load_manifest(&installation.install_dir)?)
+    Ok(load_manifest(&installation.payload_dir())?)
 }
 
 #[tauri::command]
@@ -73,14 +73,14 @@ pub async fn install_modloader(
 
     let paths = Paths::resolve(&app)?;
     let installation = resolve_installation(&app, &installation_id)?;
-    let install_dir = installation.install_dir.clone();
+    let payload_dir = installation.payload_dir();
     let payload = api::fetch_release(&tag).await?.payload();
     let cache_dir = release_cache_dir(&paths, &payload.tag);
 
     let sink = EventSink { app: &app };
-    let manifest = install_release(&sink, cache_dir, &payload, &installation_id, &install_dir).await?;
+    let manifest = install_release(&sink, cache_dir, &payload, &installation_id, &payload_dir).await?;
 
-    activate_loader(&installation_id, &install_dir).await?;
+    activate_loader(&installation).await?;
     subscribe(&paths, installation.source, payload).await?;
 
     Ok(manifest)
@@ -99,18 +99,18 @@ pub async fn uninstall_modloader(
 
     let paths = Paths::resolve(&app)?;
     let installation = resolve_installation(&app, &installation_id)?;
-    let install_dir = installation.install_dir.clone();
+    let payload_dir = installation.payload_dir();
 
     unsubscribe(&paths, installation.source).await?;
 
-    let Some(manifest) = load_manifest(&install_dir)? else {
+    let Some(manifest) = load_manifest(&payload_dir)? else {
         return Ok(());
     };
 
-    deactivate_loader(&installation_id, &install_dir).await?;
+    deactivate_loader(&installation).await?;
 
-    remove_from_install_dir(&install_dir, &manifest.artifacts).await?;
-    remove_manifest(&install_dir).await?;
+    remove_payload(&payload_dir, &manifest.artifacts).await?;
+    remove_manifest(&payload_dir).await?;
 
     info!(installation_id, tag = %manifest.tag, "mod loader uninstalled from Studio version");
 
@@ -156,16 +156,16 @@ async fn unsubscribe(paths: &Paths, source: InstallationSource) -> Result<(), Ap
     Ok(())
 }
 
-pub(crate) fn installed_manifest(install_dir: &Path) -> Option<ModLoaderInstalled> {
-    load_manifest(install_dir).ok().flatten()
+pub(crate) fn installed_manifest(payload_dir: &Path) -> Option<ModLoaderInstalled> {
+    load_manifest(payload_dir).ok().flatten()
 }
 
-async fn activate_loader(installation_id: &str, install_dir: &Path) -> Result<(), AppError> {
-    run_activation(installation_id, install_dir, Activation::Activate).await
+async fn activate_loader(installation: &StudioInstallation) -> Result<(), AppError> {
+    run_activation(installation, Activation::Activate).await
 }
 
-async fn deactivate_loader(installation_id: &str, install_dir: &Path) -> Result<(), AppError> {
-    run_activation(installation_id, install_dir, Activation::Deactivate).await
+async fn deactivate_loader(installation: &StudioInstallation) -> Result<(), AppError> {
+    run_activation(installation, Activation::Deactivate).await
 }
 
 enum Activation {
@@ -173,15 +173,17 @@ enum Activation {
     Deactivate,
 }
 
-async fn run_activation(installation_id: &str, install_dir: &Path, action: Activation) -> Result<(), AppError> {
-    let installation_id = installation_id.to_string();
-    let install_dir = install_dir.to_path_buf();
+async fn run_activation(installation: &StudioInstallation, action: Activation) -> Result<(), AppError> {
+    let installation_id = installation.id.to_string();
+    let install_dir = installation.install_dir.clone();
+    let payload_dir = installation.payload_dir();
 
     tokio::task::spawn_blocking(move || {
         let backend = activation();
         let context = ActivationContext {
             installation_id: &installation_id,
             install_dir: &install_dir,
+            payload_dir: &payload_dir,
         };
 
         match action {

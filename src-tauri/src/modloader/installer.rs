@@ -29,7 +29,7 @@ pub async fn install_release<S: InstallProgressSink>(
     cache_dir: PathBuf,
     release: &ModLoaderPayload,
     installation_id: &str,
-    install_dir: &Path,
+    payload_dir: &Path,
 ) -> Result<ModLoaderInstalled> {
     let reporter = ProgressReporter::new(sink, installation_id, &release.tag, release.asset.size);
 
@@ -46,7 +46,7 @@ pub async fn install_release<S: InstallProgressSink>(
         let artifacts = read_top_level_entries(&bundle_path).await?;
 
         reporter.emit(ModLoaderPhase::Applying, release.asset.size, None);
-        extract_bundle(&bundle_path, install_dir).await?;
+        extract_bundle(&bundle_path, payload_dir).await?;
 
         reporter.emit(ModLoaderPhase::Finalizing, release.asset.size, None);
 
@@ -63,7 +63,7 @@ pub async fn install_release<S: InstallProgressSink>(
             artifacts,
         };
 
-        save_manifest(install_dir, &manifest).await?;
+        save_manifest(payload_dir, &manifest).await?;
 
         Ok(manifest)
     }
@@ -83,9 +83,9 @@ pub async fn install_release<S: InstallProgressSink>(
     }
 }
 
-pub async fn remove_from_install_dir(install_dir: &Path, artifacts: &[String]) -> Result<()> {
+pub async fn remove_payload(payload_dir: &Path, artifacts: &[String]) -> Result<()> {
     for artifact in artifacts {
-        let target = install_dir.join(artifact);
+        let target = payload_dir.join(artifact);
 
         if target.is_dir() {
             tokio_fs::remove_dir_all(&target)
@@ -259,18 +259,18 @@ fn read_top_level_entries_blocking(bundle_path: &Path) -> Result<Vec<String>> {
     Ok(roots.into_iter().collect())
 }
 
-async fn extract_bundle(bundle_path: &Path, install_dir: &Path) -> Result<()> {
+async fn extract_bundle(bundle_path: &Path, payload_dir: &Path) -> Result<()> {
     let bundle_path = bundle_path.to_path_buf();
-    let install_dir = install_dir.to_path_buf();
+    let payload_dir = payload_dir.to_path_buf();
 
-    tokio::task::spawn_blocking(move || extract_bundle_blocking(&bundle_path, &install_dir))
+    tokio::task::spawn_blocking(move || extract_bundle_blocking(&bundle_path, &payload_dir))
         .await
         .context("the bundle extraction task failed to join")?
 }
 
-fn extract_bundle_blocking(bundle_path: &Path, install_dir: &Path) -> Result<()> {
-    if !install_dir.exists() {
-        bail!("the Studio installation directory is missing: {}", install_dir.display());
+fn extract_bundle_blocking(bundle_path: &Path, payload_dir: &Path) -> Result<()> {
+    if !payload_dir.exists() {
+        bail!("the Studio payload directory is missing: {}", payload_dir.display());
     }
 
     let file = fs::File::open(bundle_path)
@@ -286,7 +286,7 @@ fn extract_bundle_blocking(bundle_path: &Path, install_dir: &Path) -> Result<()>
         let Some(enclosed) = entry.enclosed_name() else {
             continue;
         };
-        let destination = install_dir.join(&enclosed);
+        let destination = payload_dir.join(&enclosed);
 
         if entry.is_dir() {
             fs::create_dir_all(&destination)
