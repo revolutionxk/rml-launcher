@@ -17,13 +17,19 @@ pub fn binary_target() -> &'static str {
     }
 }
 
-pub fn deploy_history_product() -> &'static str {
+pub fn deploy_history_path() -> String {
     if cfg!(target_os = "macos") {
-        "MacStudio"
-    } else if cfg!(target_pointer_width = "64") {
-        "Studio64"
+        format!("{}DeployHistory.txt", mac_studio_blob_dir().trim_start_matches('/'))
     } else {
+        "DeployHistory.txt".to_string()
+    }
+}
+
+pub fn deploy_history_product() -> &'static str {
+    if cfg!(target_os = "macos") || !cfg!(target_pointer_width = "64") {
         "Studio"
+    } else {
+        "Studio64"
     }
 }
 
@@ -73,10 +79,28 @@ pub fn package_extract_root(package_stem: &str, version_major: u32) -> &'static 
     }
 }
 
-#[cfg(all(test, not(target_os = "macos")))]
+#[cfg(test)]
 mod tests {
+    #[cfg(not(target_os = "macos"))]
     use super::package_extract_root;
+    use super::{deploy_history_path, deploy_history_product};
 
+    #[test]
+    fn deploy_history_location_matches_the_platform() {
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        assert_eq!(deploy_history_path(), "mac/arm64/DeployHistory.txt");
+        #[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+        assert_eq!(deploy_history_path(), "mac/DeployHistory.txt");
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(deploy_history_path(), "DeployHistory.txt");
+
+        #[cfg(target_os = "macos")]
+        assert_eq!(deploy_history_product(), "Studio");
+        #[cfg(all(not(target_os = "macos"), target_pointer_width = "64"))]
+        assert_eq!(deploy_history_product(), "Studio64");
+    }
+
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn resolves_known_package_roots() {
         assert_eq!(package_extract_root("content-avatar", 719), "content/avatar");

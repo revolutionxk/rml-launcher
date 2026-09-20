@@ -59,7 +59,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 function matchesVersionQuery(version: StudioVersionRecord, query: string) {
-  const haystack = [version.version, version.versionGuid, version.channel].join(" ").toLowerCase();
+  const haystack = [version.version, version.channel].join(" ").toLowerCase();
 
   return haystack.includes(query);
 }
@@ -338,7 +338,7 @@ function VersionsPage() {
 
   const renderVersionRow = ({ index, key, style }: ListRowProps) => {
     const version = filteredVersions[index];
-    const installState = activeInstall?.versionGuid === version.versionGuid ? activeInstall : null;
+    const installState = activeInstall?.version === version.version ? activeInstall : null;
     const isDownloading = installState !== null;
     const isRevalidating = revalidatingVersionId === version.id;
     const progress = installState ? Math.round(installState.progress) : 0;

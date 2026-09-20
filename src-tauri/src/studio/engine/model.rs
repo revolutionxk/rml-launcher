@@ -89,7 +89,8 @@ pub struct ScannedFlag {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineScanCache {
-    pub version_guid: String,
+    #[serde(alias = "versionGuid")]
+    pub cache_key: String,
     pub version: String,
     pub scanned_at: String,
     pub flags: Vec<ScannedFlag>,
@@ -123,7 +124,7 @@ pub struct EngineScanInfo {
     pub source: EngineScanSource,
     pub target_installation_id: Option<String>,
     pub target_version: Option<String>,
-    pub last_scanned_version_guid: Option<String>,
+    pub last_scanned_version: Option<String>,
     pub last_scanned_at: Option<String>,
     pub warning: Option<String>,
 }

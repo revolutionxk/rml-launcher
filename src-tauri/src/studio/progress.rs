@@ -6,16 +6,14 @@ pub trait StudioProgressSink {
 
 pub(super) struct ProgressReporter<'a, S: StudioProgressSink> {
     sink: &'a S,
-    version_guid: String,
     version: String,
     channel: String,
 }
 
 impl<'a, S: StudioProgressSink> ProgressReporter<'a, S> {
-    pub(super) fn new(sink: &'a S, version_guid: &str, version: &str, channel: &str) -> Self {
+    pub(super) fn new(sink: &'a S, version: &str, channel: &str) -> Self {
         Self {
             sink,
-            version_guid: version_guid.to_string(),
             version: version.to_string(),
             channel: channel.to_string(),
         }
@@ -33,7 +31,6 @@ impl<'a, S: StudioProgressSink> ProgressReporter<'a, S> {
         error: Option<String>,
     ) {
         let payload = StudioInstallProgress {
-            version_guid: self.version_guid.clone(),
             version: self.version.clone(),
             channel: self.channel.clone(),
             progress: compute_progress(&phase, downloaded_bytes, total_download_bytes, extracted_packages, total_packages),

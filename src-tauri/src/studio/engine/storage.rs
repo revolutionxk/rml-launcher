@@ -47,10 +47,10 @@ pub async fn save_preferences(paths: &Paths, preferences: &EnginePreferences) ->
     write_json(&preferences_path(paths), preferences).await
 }
 
-pub fn load_scan_cache(paths: &Paths, version_guid: &str) -> Result<Option<EngineScanCache>> {
-    read_json(&scan_cache_path(paths, version_guid))
+pub fn load_scan_cache(paths: &Paths, cache_key: &str) -> Result<Option<EngineScanCache>> {
+    read_json(&scan_cache_path(paths, cache_key))
 }
 
 pub async fn save_scan_cache(paths: &Paths, cache: &EngineScanCache) -> Result<()> {
-    write_json(&scan_cache_path(paths, &cache.version_guid), cache).await
+    write_json(&scan_cache_path(paths, &cache.cache_key), cache).await
 }

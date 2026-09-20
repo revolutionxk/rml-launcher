@@ -10,7 +10,7 @@ use futures_util::StreamExt;
 use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 use tracing::{error, info};
 
-use super::super::api::{http_client, mac_studio_url, send_get_request_with_retry};
+use super::super::api::{http_client, mac_studio_url, resolve_client_version_upload, send_get_request_with_retry};
 use super::super::config::{binary_target, MAC_STUDIO_ZIP};
 use super::super::progress::{ProgressReporter, StudioProgressSink};
 use super::super::model::{InstallPhase, InstalledStudioManifest};
@@ -29,7 +29,6 @@ impl StudioDeployment for MacDeployment {
         sink: &S,
         install_dir: PathBuf,
         download_dir: PathBuf,
-        version_guid: &str,
         version: &str,
         channel: &str,
         published_at: Option<&str>,
@@ -40,18 +39,18 @@ impl StudioDeployment for MacDeployment {
                 return read_installed_manifest(&manifest_path);
             }
 
-            let reporter = ProgressReporter::new(sink, version_guid, version, channel);
+            let reporter = ProgressReporter::new(sink, version, channel);
 
-            let result = acquire(&reporter, &install_dir, &download_dir, version_guid, version, channel, published_at).await;
+            let result = acquire(&reporter, &install_dir, &download_dir, version, channel, published_at).await;
 
             match result {
                 Ok(manifest) => {
-                    info!(version_guid, version, "macOS Studio installation completed");
+                    info!(version, "macOS Studio installation completed");
                     reporter.emit(InstallPhase::Completed, None, 0, 0, 0, 0, None);
                     Ok(manifest)
                 }
                 Err(error) => {
-                    error!(version_guid, version, error = %error, "macOS Studio installation failed");
+                    error!(version, error = %error, "macOS Studio installation failed");
                     reporter.emit(InstallPhase::Failed, None, 0, 0, 0, 0, Some(error.to_string()));
 
                     if !manifest_path.exists() {
@@ -69,12 +68,13 @@ async fn acquire<S: StudioProgressSink>(
     reporter: &ProgressReporter<'_, S>,
     install_dir: &Path,
     download_dir: &Path,
-    version_guid: &str,
     version: &str,
     channel: &str,
     published_at: Option<&str>,
 ) -> Result<InstalledStudioManifest> {
     reporter.emit(InstallPhase::Resolving, None, 0, 0, 0, 0, None);
+
+    let client_version_upload = resolve_client_version_upload(version).await?;
 
     tokio_fs::create_dir_all(download_dir)
         .await
@@ -84,16 +84,15 @@ async fn acquire<S: StudioProgressSink>(
         .with_context(|| format!("failed to create {}", install_dir.display()))?;
 
     let archive_path = download_dir.join(MAC_STUDIO_ZIP);
-    download_archive(reporter, version_guid, &archive_path).await?;
+    download_archive(reporter, &client_version_upload, &archive_path).await?;
 
     reporter.emit(InstallPhase::Extracting, Some(MAC_STUDIO_ZIP.to_string()), 0, 0, 0, 1, None);
     extract_archive(&archive_path, install_dir).await?;
 
     reporter.emit(InstallPhase::Finalizing, None, 0, 0, 1, 1, None);
-    write_version_markers(install_dir, version, version_guid).await?;
+    write_version_markers(install_dir, version, &client_version_upload).await?;
 
     let manifest = InstalledStudioManifest {
-        version_guid: version_guid.to_string(),
         version: version.to_string(),
         channel: channel.to_string(),
         binary_target: binary_target().to_string(),
@@ -109,11 +108,11 @@ async fn acquire<S: StudioProgressSink>(
 
 async fn download_archive<S: StudioProgressSink>(
     reporter: &ProgressReporter<'_, S>,
-    version_guid: &str,
+    client_version_upload: &str,
     archive_path: &Path,
 ) -> Result<()> {
-    let url = mac_studio_url(version_guid);
-    info!(version_guid, url, "downloading macOS Studio archive");
+    let url = mac_studio_url(client_version_upload);
+    info!(client_version_upload, url, "downloading macOS Studio archive");
 
     let response = send_get_request_with_retry(&http_client()?, &url, "macOS Studio archive").await?;
     let total_bytes = response.content_length().unwrap_or(0);
@@ -231,11 +230,11 @@ fn write_file(entry: &mut zip::read::ZipFile<'_>, destination: &Path, mode: Opti
     Ok(())
 }
 
-async fn write_version_markers(install_dir: &Path, version: &str, version_guid: &str) -> Result<()> {
+async fn write_version_markers(install_dir: &Path, version: &str, client_version_upload: &str) -> Result<()> {
     tokio_fs::write(install_dir.join("version.txt"), version.as_bytes())
         .await
         .with_context(|| format!("failed to write {}", install_dir.join("version.txt").display()))?;
-    tokio_fs::write(install_dir.join("version-guid.txt"), version_guid.as_bytes())
+    tokio_fs::write(install_dir.join("version-guid.txt"), client_version_upload.as_bytes())
         .await
         .with_context(|| format!("failed to write {}", install_dir.join("version-guid.txt").display()))?;
     Ok(())

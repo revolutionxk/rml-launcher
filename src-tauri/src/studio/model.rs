@@ -21,7 +21,6 @@ pub struct PackageManifestEntry {
 
 #[derive(Debug, Clone)]
 pub struct StudioBuild {
-    pub version_guid: String,
     pub version: String,
     pub published_at: String,
 }
@@ -29,7 +28,6 @@ pub struct StudioBuild {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledStudioManifest {
-    pub version_guid: String,
     pub version: String,
     pub channel: String,
     pub binary_target: String,
@@ -55,7 +53,6 @@ pub struct StudioPreferences {
 #[serde(rename_all = "camelCase")]
 pub struct StudioVersionEntry {
     pub id: String,
-    pub version_guid: String,
     pub version: String,
     pub channel: String,
     pub installed_at: Option<String>,
@@ -71,15 +68,9 @@ pub struct StudioVersionEntry {
 }
 
 impl StudioVersionEntry {
-    pub fn available(
-        version_guid: String,
-        version: String,
-        channel: &str,
-        published_at: Option<String>,
-    ) -> Self {
+    pub fn available(version: String, channel: &str, published_at: Option<String>) -> Self {
         Self {
-            id: format!("remote:{version_guid}"),
-            version_guid,
+            id: format!("remote:{version}"),
             version,
             channel: channel.to_string(),
             installed_at: None,
@@ -98,7 +89,6 @@ impl StudioVersionEntry {
     pub fn from_installation(installation: &StudioInstallation) -> Self {
         Self {
             id: installation.id.to_string(),
-            version_guid: installation.version_guid.clone().unwrap_or_default(),
             version: installation.version.clone().unwrap_or_default(),
             channel: installation
                 .channel
@@ -141,7 +131,6 @@ pub enum InstallPhase {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StudioInstallProgress {
-    pub version_guid: String,
     pub version: String,
     pub channel: String,
     pub phase: InstallPhase,
@@ -169,14 +158,24 @@ mod tests {
     }
 
     #[test]
+    fn legacy_manifests_with_a_version_guid_still_load() {
+        let manifest: InstalledStudioManifest = serde_json::from_str(
+            r#"{"versionGuid":"version-abc123","version":"0.730.0.7300790","channel":"LIVE","binaryTarget":"WindowsStudio64","installedAt":"2026-01-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.version, "0.730.0.7300790");
+    }
+
+    #[test]
     fn preferences_are_written_back_under_the_new_key() {
         let preferences = StudioPreferences {
-            default_installation_id: Some("managed:version-abc123".into()),
+            default_installation_id: Some("managed:0.730.0.7300790".into()),
         };
 
         let json = serde_json::to_string(&preferences).unwrap();
 
-        assert_eq!(json, r#"{"defaultInstallationId":"managed:version-abc123"}"#);
+        assert_eq!(json, r#"{"defaultInstallationId":"managed:0.730.0.7300790"}"#);
     }
 
     #[test]
@@ -198,14 +197,9 @@ mod tests {
 
     #[test]
     fn remote_entries_are_namespaced_so_they_never_collide_with_installations() {
-        let entry = StudioVersionEntry::available(
-            "version-abc123".into(),
-            "0.730.0".into(),
-            "LIVE",
-            None,
-        );
+        let entry = StudioVersionEntry::available("0.730.0.7300790".into(), "LIVE", None);
 
-        assert_eq!(entry.id, "remote:version-abc123");
+        assert_eq!(entry.id, "remote:0.730.0.7300790");
         assert!(!entry.is_installed);
     }
 }

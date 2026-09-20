@@ -18,7 +18,6 @@ export function can(record: { capabilities: number }, capability: number) {
 
 export interface StudioVersionRecord {
   id: string;
-  versionGuid: string;
   version: string;
   channel: string;
   installedAt: string | null;
@@ -34,7 +33,6 @@ export interface StudioVersionRecord {
 }
 
 export interface StudioInstallProgress {
-  versionGuid: string;
   version: string;
   channel: string;
   phase: StudioInstallPhase;
@@ -66,7 +64,6 @@ export async function setDefaultStudioVersion(installationId: string | null) {
 
 export async function installStudioVersion(version: StudioVersionRecord) {
   return invoke<StudioVersionRecord>("install_studio_version", {
-    versionGuid: version.versionGuid,
     version: version.version,
     channel: version.channel,
     publishedAt: version.publishedAt,

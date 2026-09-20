@@ -13,7 +13,10 @@ use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 use tracing::{error, info, warn};
 
 use super::{
-    api::{fetch_package_manifest, http_client, package_url, send_get_request_with_retry},
+    api::{
+        fetch_package_manifest, http_client, package_url, resolve_client_version_upload,
+        send_get_request_with_retry,
+    },
     config::{binary_target, package_extract_root, APP_SETTINGS_XML, OAUTH2_CONFIG_JSON},
     model::{InstallPhase, InstalledStudioManifest, PackageManifestEntry},
     paths::{version_executable_path, version_manifest_path},
@@ -25,16 +28,13 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
     sink: &S,
     install_dir: PathBuf,
     download_dir: PathBuf,
-    version_guid: &str,
     version: &str,
     channel: &str,
     published_at: Option<&str>,
 ) -> Result<InstalledStudioManifest> {
-    info!(version_guid, version, channel, "starting Studio installation");
+    info!(version, channel, "starting Studio installation");
 
-    let version_guid = version_guid.to_string();
     let version = version.to_string();
-    let failed_version_guid = version_guid.clone();
     let failed_version = version.clone();
     let manifest_path = version_manifest_path(&install_dir);
 
@@ -42,17 +42,19 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
         return read_installed_manifest(&manifest_path);
     }
 
-    let reporter = ProgressReporter::new(sink, &version_guid, &version, channel);
+    let reporter = ProgressReporter::new(sink, &version, channel);
 
     let install_result: Result<InstalledStudioManifest> = async {
         reporter.emit(InstallPhase::Resolving, None, 0, 0, 0, 0, None);
 
-        let packages = fetch_package_manifest(&version_guid).await?;
+        let client_version_upload = resolve_client_version_upload(&version).await?;
+        let packages = fetch_package_manifest(&client_version_upload).await?;
         let total_download_bytes = packages.iter().map(|package| package.packed_size).sum::<u64>();
         let version_major = parse_version_major(&version)?;
 
         info!(
-            version_guid,
+            version,
+            client_version_upload,
             package_count = packages.len(),
             total_download_bytes,
             "resolved Studio package manifest"
@@ -81,7 +83,7 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
             let archive_path = download_dir.join(&package.name);
             download_package(
                 package,
-                &version_guid,
+                &client_version_upload,
                 &archive_path,
                 &reporter,
                 &mut downloaded_bytes,
@@ -119,10 +121,9 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
             None,
         );
 
-        write_runtime_files(&install_dir, &version, &version_guid).await?;
+        write_runtime_files(&install_dir, &version, &client_version_upload).await?;
 
         let manifest = InstalledStudioManifest {
-            version_guid,
             version,
             channel: channel.to_string(),
             binary_target: binary_target().to_string(),
@@ -139,12 +140,12 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
 
     match install_result {
         Ok(manifest) => {
-            info!(version_guid = %manifest.version_guid, version = %manifest.version, "Studio installation completed");
+            info!(version = %manifest.version, "Studio installation completed");
             reporter.emit(InstallPhase::Completed, None, 0, 0, 0, 0, None);
             Ok(manifest)
         }
         Err(error) => {
-            error!(version_guid = %failed_version_guid, version = %failed_version, error = %error, "Studio installation failed");
+            error!(version = %failed_version, error = %error, "Studio installation failed");
             reporter.emit(
                 InstallPhase::Failed,
                 None,
@@ -167,10 +168,7 @@ pub async fn install_version<S: StudioProgressSink + Send + Sync>(
 pub async fn revalidate_version(
     install_dir: PathBuf,
     downloads_root: PathBuf,
-    version_guid: &str,
 ) -> Result<InstalledStudioManifest> {
-    info!(version_guid, "starting Studio revalidation");
-
     let manifest_path = version_manifest_path(&install_dir);
 
     if !manifest_path.exists() {
@@ -178,9 +176,12 @@ pub async fn revalidate_version(
     }
 
     let mut manifest = read_installed_manifest(&manifest_path)?;
+    info!(version = %manifest.version, "starting Studio revalidation");
+
     let version_major = parse_version_major(&manifest.version)?;
-    let download_dir = downloads_root.join(&manifest.version_guid);
-    let packages = fetch_package_manifest(&manifest.version_guid).await?;
+    let download_dir = downloads_root.join(&manifest.version);
+    let client_version_upload = resolve_client_version_upload(&manifest.version).await?;
+    let packages = fetch_package_manifest(&client_version_upload).await?;
 
     tokio_fs::create_dir_all(&download_dir)
         .await
@@ -188,29 +189,37 @@ pub async fn revalidate_version(
 
     for package in &packages {
         let archive_path = download_dir.join(&package.name);
-        let _ = download_package_archive(package, &manifest.version_guid, &archive_path, |_| {}).await?;
+        let _ = download_package_archive(package, &client_version_upload, &archive_path, |_| {}).await?;
     }
 
-    validate_install_layout(&install_dir, &download_dir, &manifest, &packages, version_major).await?;
+    validate_install_layout(
+        &install_dir,
+        &download_dir,
+        &manifest,
+        &client_version_upload,
+        &packages,
+        version_major,
+    )
+    .await?;
 
     manifest.integrity_verified_at = Some(Utc::now().to_rfc3339());
     write_installed_manifest(&manifest_path, &manifest).await?;
 
-    info!(version_guid = %manifest.version_guid, version = %manifest.version, "Studio revalidation completed");
+    info!(version = %manifest.version, "Studio revalidation completed");
 
     Ok(manifest)
 }
 
 async fn download_package<S: StudioProgressSink>(
     package: &PackageManifestEntry,
-    version_guid: &str,
+    client_version_upload: &str,
     archive_path: &Path,
     reporter: &ProgressReporter<'_, S>,
     downloaded_bytes: &mut u64,
     total_download_bytes: u64,
     total_packages: usize,
 ) -> Result<()> {
-    let used_cache = download_package_archive(package, version_guid, archive_path, |chunk_len| {
+    let used_cache = download_package_archive(package, client_version_upload, archive_path, |chunk_len| {
         *downloaded_bytes += chunk_len;
 
         reporter.emit(
@@ -244,7 +253,7 @@ async fn download_package<S: StudioProgressSink>(
 
 async fn download_package_archive<F>(
     package: &PackageManifestEntry,
-    version_guid: &str,
+    client_version_upload: &str,
     archive_path: &Path,
     mut on_chunk: F,
 ) -> Result<bool>
@@ -279,7 +288,7 @@ where
         let _ = tokio_fs::remove_file(&partial_archive_path).await;
     }
 
-    let package_download_url = package_url(version_guid, &package.name);
+    let package_download_url = package_url(client_version_upload, &package.name);
     info!(package = %package.name, url = %package_download_url, "downloading Studio package archive");
 
     let response = send_get_request_with_retry(
@@ -470,16 +479,25 @@ async fn validate_install_layout(
     install_dir: &Path,
     download_dir: &Path,
     manifest: &InstalledStudioManifest,
+    client_version_upload: &str,
     packages: &[PackageManifestEntry],
     version_major: u32,
 ) -> Result<()> {
     let install_dir = install_dir.to_path_buf();
     let download_dir = download_dir.to_path_buf();
     let manifest = manifest.clone();
+    let client_version_upload = client_version_upload.to_string();
     let packages = packages.to_vec();
 
     tokio::task::spawn_blocking(move || {
-        validate_install_layout_blocking(&install_dir, &download_dir, &manifest, &packages, version_major)
+        validate_install_layout_blocking(
+            &install_dir,
+            &download_dir,
+            &manifest,
+            &client_version_upload,
+            &packages,
+            version_major,
+        )
     })
     .await
     .context("the install validation task failed to join")??;
@@ -491,6 +509,7 @@ fn validate_install_layout_blocking(
     install_dir: &Path,
     download_dir: &Path,
     manifest: &InstalledStudioManifest,
+    client_version_upload: &str,
     packages: &[PackageManifestEntry],
     version_major: u32,
 ) -> Result<()> {
@@ -509,7 +528,7 @@ fn validate_install_layout_blocking(
         OAUTH2_CONFIG_JSON,
     )?;
     validate_trimmed_file(&install_dir.join("version.txt"), &manifest.version)?;
-    validate_trimmed_file(&install_dir.join("version-guid.txt"), &manifest.version_guid)?;
+    validate_trimmed_file(&install_dir.join("version-guid.txt"), client_version_upload)?;
 
     for package in packages {
         let package_stem = package.name.trim_end_matches(".zip");
@@ -520,7 +539,7 @@ fn validate_install_layout_blocking(
             &download_dir.join(&package.name),
             install_dir,
             extraction_root,
-            &manifest.version_guid,
+            &manifest.version,
         )?;
     }
 
@@ -532,7 +551,7 @@ fn validate_installed_package_blocking(
     archive_path: &Path,
     install_dir: &Path,
     extraction_root: &str,
-    version_guid: &str,
+    version: &str,
 ) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("failed to open cached archive {}", archive_path.display()))?;
@@ -558,7 +577,7 @@ fn validate_installed_package_blocking(
             if !destination.is_dir() {
                 bail!(
                     "{} is missing expected directory {} for {}",
-                    version_guid,
+                    version,
                     destination.display(),
                     package.name,
                 );
@@ -573,7 +592,7 @@ fn validate_installed_package_blocking(
         if !metadata.is_file() {
             bail!(
                 "{} expected file {} for {} but found something else",
-                version_guid,
+                version,
                 destination.display(),
                 package.name,
             );
@@ -595,7 +614,7 @@ fn validate_installed_package_blocking(
     if validated_bytes != package.unpacked_size {
         bail!(
             "{} expected {} installed bytes for {} but validated {}",
-            version_guid,
+            version,
             package.unpacked_size,
             package.name,
             validated_bytes,
@@ -702,7 +721,7 @@ fn verify_archive_structure_blocking(package: &PackageManifestEntry, archive_pat
     Ok(())
 }
 
-async fn write_runtime_files(install_dir: &Path, version: &str, version_guid: &str) -> Result<()> {
+async fn write_runtime_files(install_dir: &Path, version: &str, client_version_upload: &str) -> Result<()> {
     tokio_fs::write(install_dir.join("AppSettings.xml"), APP_SETTINGS_XML.as_bytes())
         .await
         .with_context(|| format!("failed to write {}", install_dir.join("AppSettings.xml").display()))?;
@@ -727,7 +746,7 @@ async fn write_runtime_files(install_dir: &Path, version: &str, version_guid: &s
     tokio_fs::write(install_dir.join("version.txt"), version.as_bytes())
         .await
         .with_context(|| format!("failed to write {}", install_dir.join("version.txt").display()))?;
-    tokio_fs::write(install_dir.join("version-guid.txt"), version_guid.as_bytes())
+    tokio_fs::write(install_dir.join("version-guid.txt"), client_version_upload.as_bytes())
         .await
         .with_context(|| {
             format!(
