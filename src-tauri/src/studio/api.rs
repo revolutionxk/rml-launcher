@@ -293,10 +293,6 @@ fn parse_deploy_history(data: &str, product_name: &str) -> Vec<StudioBuild> {
             continue;
         };
 
-        if version_guid.eq_ignore_ascii_case("hidden") || !seen_guids.insert(version_guid.to_string()) {
-            continue;
-        }
-
         let Some((published_at, version_details)) = details.split_once(", file version: ") else {
             continue;
         };
@@ -313,6 +309,10 @@ fn parse_deploy_history(data: &str, product_name: &str) -> Vec<StudioBuild> {
         let Some(version) = normalize_file_version(raw_version) else {
             continue;
         };
+
+        if !seen_guids.insert(version.to_string()) {
+            continue;
+        }
 
         builds.push(StudioBuild {
             version_guid: version_guid.to_string(),
@@ -386,10 +386,11 @@ mod tests {
             "Studio64",
         );
 
-        assert_eq!(history.len(), 2);
+        assert_eq!(history.len(), 3);
         assert_eq!(history[0].version_guid, "recent-guid");
         assert_eq!(history[0].version, "0.718.0.7181104");
-        assert_eq!(history[1].version_guid, "older-guid");
+        assert_eq!(history[1].version_guid, "hidden");
+        assert_eq!(history[2].version_guid, "older-guid");
     }
 
     #[test]

@@ -351,7 +351,7 @@ async fn list_studio_versions_inner(app: &AppHandle) -> Result<StudioVersionsRes
         for build in history {
             let is_latest = latest_remote
                 .as_ref()
-                .map(|latest| api::same_version_guid(&latest.client_version_upload, &build.version_guid))
+                .map(|latest| latest.version == build.version)
                 .unwrap_or(false);
 
             merge_history_build(&mut versions, build, is_latest);
@@ -445,7 +445,7 @@ fn merge_remote_version(
 ) {
     if let Some(existing) = versions
         .iter_mut()
-        .find(|entry| api::same_version_guid(&entry.version_guid, &version_guid))
+        .find(|entry| entry.version == version)
     {
         existing.version = version;
         existing.channel = channel.to_string();
