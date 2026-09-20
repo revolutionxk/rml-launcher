@@ -37,12 +37,11 @@ impl InstallationProvider for ManagedProvider {
 
             let mut installation = StudioInstallation::new(
                 InstallationSource::Managed,
-                &manifest.version_guid,
+                &manifest.version,
                 install_dir.clone(),
                 version_executable_path(&install_dir),
             );
             installation.version = Some(manifest.version);
-            installation.version_guid = Some(manifest.version_guid);
             installation.channel = Some(manifest.channel);
             installation.installed_at = Some(manifest.installed_at);
             installation.published_at = manifest.published_at;
@@ -68,13 +67,13 @@ mod tests {
         dir
     }
 
-    fn write_managed_version(versions: &Path, guid: &str) {
-        let dir = versions.join(guid);
+    fn write_managed_version(versions: &Path, dir_name: &str, version: &str) {
+        let dir = versions.join(dir_name);
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             dir.join("rml-studio.json"),
             format!(
-                r#"{{"versionGuid":"{guid}","version":"1.2.3","channel":"LIVE","binaryTarget":"WindowsStudio64","installedAt":"2026-01-01T00:00:00Z"}}"#
+                r#"{{"version":"{version}","channel":"LIVE","binaryTarget":"WindowsStudio64","installedAt":"2026-01-01T00:00:00Z"}}"#
             ),
         )
         .unwrap();
@@ -84,17 +83,33 @@ mod tests {
     fn discovers_managed_versions_with_full_capabilities() {
         let data_dir = scratch("full");
         let versions = data_dir.join("studio/versions");
-        write_managed_version(&versions, "version-aaa");
+        write_managed_version(&versions, "1.2.3", "1.2.3");
 
         let found = ManagedProvider
             .discover(&Paths::for_test(data_dir.clone()))
             .unwrap();
 
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].version_guid.as_deref(), Some("version-aaa"));
         assert_eq!(found[0].version.as_deref(), Some("1.2.3"));
-        assert_eq!(found[0].id.as_str(), "managed:version-aaa");
+        assert_eq!(found[0].id.as_str(), "managed:1.2.3");
         assert!(found[0].capabilities.contains(Capabilities::UNINSTALL));
+
+        fs::remove_dir_all(&data_dir).ok();
+    }
+
+    #[test]
+    fn legacy_guid_named_directories_are_keyed_by_their_manifest_version() {
+        let data_dir = scratch("legacy");
+        let versions = data_dir.join("studio/versions");
+        write_managed_version(&versions, "version-aaa", "1.2.3");
+
+        let found = ManagedProvider
+            .discover(&Paths::for_test(data_dir.clone()))
+            .unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id.as_str(), "managed:1.2.3");
+        assert_eq!(found[0].install_dir, versions.join("version-aaa"));
 
         fs::remove_dir_all(&data_dir).ok();
     }

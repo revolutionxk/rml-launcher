@@ -12,13 +12,11 @@ mod macos;
 mod windows;
 
 pub trait StudioDeployment {
-    #[allow(clippy::too_many_arguments)]
     fn install<S: StudioProgressSink + Send + Sync>(
         &self,
         sink: &S,
         install_dir: PathBuf,
         download_dir: PathBuf,
-        version_guid: &str,
         version: &str,
         channel: &str,
         published_at: Option<&str>,

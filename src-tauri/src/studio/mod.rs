@@ -130,25 +130,16 @@ pub async fn install_latest_studio(
     info!(
         channel = CURRENT_CHANNEL,
         version = %version_info.version,
-        version_guid = %version_info.client_version_upload,
         "installing latest Studio version"
     );
 
-    Ok(install_studio_version_inner(
-        &app,
-        &version_info.client_version_upload,
-        &version_info.version,
-        CURRENT_CHANNEL,
-        None,
-    )
-    .await?)
+    Ok(install_studio_version_inner(&app, &version_info.version, CURRENT_CHANNEL, None).await?)
 }
 
 #[tauri::command]
 pub async fn install_studio_version(
     app: AppHandle,
     state: State<'_, StudioState>,
-    version_guid: String,
     version: String,
     channel: Option<String>,
     published_at: Option<String>,
@@ -160,10 +151,9 @@ pub async fn install_studio_version(
 
     let channel = channel.unwrap_or_else(|| CURRENT_CHANNEL.to_string());
 
-    info!(version_guid, version, channel, "installing requested Studio version");
+    info!(version, channel, "installing requested Studio version");
 
-    Ok(install_studio_version_inner(&app, &version_guid, &version, &channel, published_at.as_deref())
-        .await?)
+    Ok(install_studio_version_inner(&app, &version, &channel, published_at.as_deref()).await?)
 }
 
 #[tauri::command]
@@ -245,33 +235,20 @@ pub async fn revalidate_studio_version(
         let installation = resolve_installation(&app, &installation_id)?;
         require(&installation, Capabilities::REVALIDATE)?;
 
-        let version_guid = installation
-            .version_guid
-            .clone()
-            .ok_or_else(|| AppError::Failed("This Studio installation cannot be revalidated.".into()))?;
-
         let downloads_root = downloads_dir(&paths);
-        let manifest =
-            revalidate_version(installation.install_dir.clone(), downloads_root, &version_guid)
-                .await?;
-        let install_dir = version_install_dir(&paths, &manifest.version_guid);
-        let executable_path = version_executable_path(&install_dir);
+        let manifest = revalidate_version(installation.install_dir.clone(), downloads_root).await?;
 
         let mut refreshed = installation;
         refreshed.version = Some(manifest.version);
-        refreshed.version_guid = Some(manifest.version_guid);
         refreshed.channel = Some(manifest.channel);
         refreshed.installed_at = Some(manifest.installed_at);
         refreshed.published_at = manifest.published_at;
         refreshed.integrity_verified_at = manifest.integrity_verified_at;
-        refreshed.install_dir = install_dir;
-        refreshed.executable = executable_path;
 
         let mut entry = StudioVersionEntry::from_installation(&refreshed);
 
         if let Ok(latest_remote) = api::fetch_current_version(CURRENT_CHANNEL).await {
-            entry.is_latest =
-                api::same_version_guid(&latest_remote.client_version_upload, &entry.version_guid);
+            entry.is_latest = latest_remote.version == entry.version;
         } else {
             warn!(
                 installation_id,
@@ -311,8 +288,8 @@ pub async fn uninstall_studio(
         .await
         .with_context(|| format!("failed to remove {}", installation.install_dir.display()))?;
 
-    if let Some(version_guid) = installation.version_guid.as_deref() {
-        let download_dir = version_download_dir(&paths, version_guid);
+    if let Some(version) = installation.version.as_deref() {
+        let download_dir = version_download_dir(&paths, version);
         if download_dir.exists() {
             let _ = tokio_fs::remove_dir_all(&download_dir).await;
         }
@@ -337,18 +314,22 @@ async fn list_studio_versions_inner(app: &AppHandle) -> Result<StudioVersionsRes
     let latest_remote = api::fetch_current_version(CURRENT_CHANNEL).await.ok();
 
     if let Some(latest_remote) = latest_remote.as_ref() {
-        merge_remote_version(
-            &mut versions,
-            latest_remote.client_version_upload.clone(),
-            latest_remote.version.clone(),
-            CURRENT_CHANNEL,
-            None,
-            true,
-        );
+        merge_remote_version(&mut versions, latest_remote.version.clone(), CURRENT_CHANNEL, None, true);
     }
 
     if let Ok(history) = api::fetch_build_history().await {
+        let downloadable = downloadable_versions().await;
+
         for build in history {
+            let is_known = downloadable
+                .as_ref()
+                .is_none_or(|ledger| ledger.contains_key(&build.version));
+            let is_listed = versions.iter().any(|entry| entry.version == build.version);
+
+            if !is_known && !is_listed {
+                continue;
+            }
+
             let is_latest = latest_remote
                 .as_ref()
                 .map(|latest| latest.version == build.version)
@@ -381,40 +362,53 @@ async fn list_studio_versions_inner(app: &AppHandle) -> Result<StudioVersionsRes
     Ok(StudioVersionsResponse { versions })
 }
 
+#[cfg(not(target_os = "macos"))]
+async fn downloadable_versions() -> Option<std::collections::BTreeMap<String, String>> {
+    match api::fetch_version_history().await {
+        Ok(ledger) => Some(ledger),
+        Err(error) => {
+            warn!(%error, "failed to fetch the Studio version ledger; listing every historical build");
+            None
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn downloadable_versions() -> Option<std::collections::BTreeMap<String, String>> {
+    None
+}
+
 async fn install_studio_version_inner(
     app: &AppHandle,
-    version_guid: &str,
     version: &str,
     channel: &str,
     published_at: Option<&str>,
 ) -> Result<StudioVersionEntry> {
     let paths = Paths::resolve(app)?;
-    let install_dir = version_install_dir(&paths, version_guid);
-    let download_dir = version_download_dir(&paths, version_guid);
+    let install_dir = version_install_dir(&paths, version);
+    let download_dir = version_download_dir(&paths, version);
     let manifest = active_deployment()
         .install(
             &EventSink { app },
             install_dir,
             download_dir,
-            version_guid,
             version,
             channel,
             published_at,
         )
         .await?;
-    let install_dir = version_install_dir(&paths, &manifest.version_guid);
+    let install_dir = version_install_dir(&paths, &manifest.version);
     let executable_path = version_executable_path(&install_dir);
 
     apply_saved_preferences_to_install_dir(&paths, &install_dir).await?;
 
     let mut installation = StudioInstallation::new(
         installation::InstallationSource::Managed,
-        &manifest.version_guid,
+        &manifest.version,
         install_dir,
         executable_path,
     );
     installation.version = Some(manifest.version);
-    installation.version_guid = Some(manifest.version_guid);
     installation.channel = Some(manifest.channel);
     installation.installed_at = Some(manifest.installed_at);
     installation.published_at = manifest.published_at;
@@ -427,7 +421,6 @@ async fn install_studio_version_inner(
 fn merge_history_build(versions: &mut Vec<StudioVersionEntry>, build: StudioBuild, is_latest: bool) {
     merge_remote_version(
         versions,
-        build.version_guid,
         build.version,
         CURRENT_CHANNEL,
         Some(build.published_at),
@@ -437,7 +430,6 @@ fn merge_history_build(versions: &mut Vec<StudioVersionEntry>, build: StudioBuil
 
 fn merge_remote_version(
     versions: &mut Vec<StudioVersionEntry>,
-    version_guid: String,
     version: String,
     channel: &str,
     published_at: Option<String>,
@@ -447,7 +439,6 @@ fn merge_remote_version(
         .iter_mut()
         .find(|entry| entry.version == version)
     {
-        existing.version = version;
         existing.channel = channel.to_string();
         existing.is_latest |= is_latest;
 
@@ -458,7 +449,7 @@ fn merge_remote_version(
         return;
     }
 
-    let mut entry = StudioVersionEntry::available(version_guid, version, channel, published_at);
+    let mut entry = StudioVersionEntry::available(version, channel, published_at);
     entry.is_latest = is_latest;
     versions.push(entry);
 }

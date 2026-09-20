@@ -1,17 +1,19 @@
+#[cfg(not(target_os = "macos"))]
+use std::collections::BTreeMap;
 use std::collections::HashSet;
-
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
-#[cfg(not(target_os = "macos"))]
-use anyhow::bail;
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDateTime;
 use reqwest::Client;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
 use super::{
-    config::{binary_target, deploy_history_product, mac_studio_blob_dir, MAC_STUDIO_ZIP},
+    config::{
+        binary_target, deploy_history_path, deploy_history_product, mac_studio_blob_dir, CURRENT_CHANNEL,
+        MAC_STUDIO_ZIP,
+    },
     model::{CurrentVersionResponse, StudioBuild},
 };
 #[cfg(not(target_os = "macos"))]
@@ -19,8 +21,10 @@ use super::model::PackageManifestEntry;
 
 const SETUP_BASE_URLS: &[&str] = &["https://setup.rbxcdn.com"];
 const CLIENT_SETTINGS_BASE_URL: &str = "https://clientsettingscdn.roblox.com/v2/client-version";
+#[cfg(not(target_os = "macos"))]
+const VERSION_HISTORY_URL: &str =
+    "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/version-history.json";
 const USER_AGENT: &str = "RML Launcher/0.1.0";
-const VERSION_GUID_PREFIX: &str = "version-";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const REQUEST_RETRY_DELAYS_MS: &[u64] = &[0, 500, 1500];
@@ -46,31 +50,55 @@ pub async fn fetch_current_version(channel: &str) -> Result<CurrentVersionRespon
     info!(
         channel,
         version = %response.version,
-        version_guid = %response.client_version_upload,
+        client_version_upload = %response.client_version_upload,
         "resolved current Roblox Studio version"
     );
 
     Ok(response)
 }
 
+pub async fn resolve_client_version_upload(version: &str) -> Result<String> {
+    match fetch_current_version(CURRENT_CHANNEL).await {
+        Ok(current) if current.version == version => return Ok(current.client_version_upload),
+        Ok(_) => {}
+        Err(error) => warn!(version, error = %error, "failed to resolve the current Studio version"),
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    if let Some(client_version_upload) = fetch_version_history().await?.get(version) {
+        info!(version, client_version_upload, "resolved Studio version through the version ledger");
+        return Ok(client_version_upload.clone());
+    }
+
+    bail!("Roblox does not expose a download for Studio {version}")
+}
+
 #[cfg(not(target_os = "macos"))]
-pub async fn fetch_package_manifest(version_guid: &str) -> Result<Vec<PackageManifestEntry>> {
-    let normalized_version_guid = normalize_version_guid(version_guid);
+pub async fn fetch_version_history() -> Result<BTreeMap<String, String>> {
+    send_get_request_with_retry(&http_client()?, VERSION_HISTORY_URL, "Studio version ledger")
+        .await?
+        .json::<BTreeMap<String, String>>()
+        .await
+        .context("failed to decode the Studio version ledger")
+}
+
+#[cfg(not(target_os = "macos"))]
+pub async fn fetch_package_manifest(client_version_upload: &str) -> Result<Vec<PackageManifestEntry>> {
     let manifest_candidates = [
-        format!("{normalized_version_guid}-rbxPkgManifest.txt"),
-        format!("{normalized_version_guid}-rbxManifest.txt"),
+        format!("{client_version_upload}-rbxPkgManifest.txt"),
+        format!("{client_version_upload}-rbxManifest.txt"),
     ];
     let mut last_error = None;
 
     for manifest_path in manifest_candidates {
         match fetch_setup_text(&manifest_path, "package manifest").await {
             Ok(data) => {
-                info!(version_guid, manifest_path, "resolved Roblox Studio package manifest");
+                info!(client_version_upload, manifest_path, "resolved Roblox Studio package manifest");
                 return parse_package_manifest(&data)
                     .with_context(|| format!("failed to parse the package manifest at {manifest_path}"));
             }
             Err(error) => {
-                warn!(version_guid, manifest_path, error = %error, "package manifest candidate failed");
+                warn!(client_version_upload, manifest_path, error = %error, "package manifest candidate failed");
                 last_error = Some(error);
             }
         }
@@ -79,36 +107,28 @@ pub async fn fetch_package_manifest(version_guid: &str) -> Result<Vec<PackageMan
     Err(last_error.unwrap_or_else(|| {
         anyhow!(
             "Roblox did not expose a package manifest for {} after all retry attempts",
-            version_guid,
+            client_version_upload,
         )
     }))
 }
 
 pub async fn fetch_build_history() -> Result<Vec<StudioBuild>> {
-    let data = fetch_setup_text("DeployHistory.txt", "Studio build history").await?;
+    let data = fetch_setup_text(&deploy_history_path(), "Studio build history").await?;
 
     Ok(parse_deploy_history(&data, deploy_history_product()))
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn package_url(version_guid: &str, package_name: &str) -> String {
-    let normalized_version_guid = normalize_version_guid(version_guid);
-
-    format!("{}/{normalized_version_guid}-{package_name}", SETUP_BASE_URLS[0])
+pub fn package_url(client_version_upload: &str, package_name: &str) -> String {
+    format!("{}/{client_version_upload}-{package_name}", SETUP_BASE_URLS[0])
 }
 
-pub fn mac_studio_url(version_guid: &str) -> String {
-    let normalized_version_guid = normalize_version_guid(version_guid);
-
+pub fn mac_studio_url(client_version_upload: &str) -> String {
     format!(
-        "{}{}{normalized_version_guid}-{MAC_STUDIO_ZIP}",
+        "{}{}{client_version_upload}-{MAC_STUDIO_ZIP}",
         SETUP_BASE_URLS[0],
         mac_studio_blob_dir(),
     )
-}
-
-pub(super) fn same_version_guid(left: &str, right: &str) -> bool {
-    normalize_version_guid(left).eq_ignore_ascii_case(&normalize_version_guid(right))
 }
 
 pub(super) fn http_client() -> Result<Client> {
@@ -213,18 +233,6 @@ fn truncate_for_log(value: &str) -> String {
     preview.replace('\n', "\\n")
 }
 
-fn normalize_version_guid(version_guid: &str) -> String {
-    let trimmed = version_guid.trim();
-
-    if trimmed.len() >= VERSION_GUID_PREFIX.len()
-        && trimmed[..VERSION_GUID_PREFIX.len()].eq_ignore_ascii_case(VERSION_GUID_PREFIX)
-    {
-        return trimmed.to_string();
-    }
-
-    format!("{VERSION_GUID_PREFIX}{trimmed}")
-}
-
 #[cfg(not(target_os = "macos"))]
 fn parse_package_manifest(data: &str) -> Result<Vec<PackageManifestEntry>> {
     let mut lines = data.lines();
@@ -278,18 +286,15 @@ fn parse_deploy_history(data: &str, product_name: &str) -> Vec<StudioBuild> {
 
     let prefix = format!("New {product_name} version-");
     let mut builds = Vec::new();
-    let mut seen_guids = HashSet::new();
+    let mut seen_versions = HashSet::new();
 
     for raw_line in data.lines().rev() {
         let line = raw_line.trim();
-        if !line.starts_with(&prefix) {
+        if !line.starts_with(&prefix) || line.ends_with("Error!") {
             continue;
         }
 
-        let Some((header, details)) = line.split_once(" at ") else {
-            continue;
-        };
-        let Some(version_guid) = header.strip_prefix(&prefix) else {
+        let Some((_, details)) = line.split_once(" at ") else {
             continue;
         };
 
@@ -310,15 +315,11 @@ fn parse_deploy_history(data: &str, product_name: &str) -> Vec<StudioBuild> {
             continue;
         };
 
-        if !seen_guids.insert(version.to_string()) {
+        if !seen_versions.insert(version.clone()) {
             continue;
         }
 
-        builds.push(StudioBuild {
-            version_guid: version_guid.to_string(),
-            version,
-            published_at,
-        });
+        builds.push(StudioBuild { version, published_at });
     }
 
     builds
@@ -343,13 +344,13 @@ fn normalize_file_version(raw: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{mac_studio_url, normalize_version_guid, parse_deploy_history, same_version_guid};
+    use super::{mac_studio_url, parse_deploy_history};
     #[cfg(not(target_os = "macos"))]
     use super::parse_package_manifest;
 
     #[test]
     fn builds_the_mac_studio_download_url() {
-        let url = mac_studio_url("abc123");
+        let url = mac_studio_url("version-abc123");
 
         #[cfg(target_arch = "aarch64")]
         assert_eq!(url, "https://setup.rbxcdn.com/mac/arm64/version-abc123-RobloxStudioApp.zip");
@@ -374,7 +375,43 @@ mod tests {
     }
 
     #[test]
-    fn parses_recent_build_history_and_skips_hidden_entries() {
+    fn parses_the_macos_build_history() {
+        let history = parse_deploy_history(
+            concat!(
+                "New Studio version-hidden at 9/14/2026 4:07:58 PM, file version: 0, 739, 0, 7390687, git hash: 0.739.0.7390687 ...Done!
+",
+                "
+",
+                "New Client version-hidden at 9/14/2026 4:31:45 PM, file version: 0,739,0,7390687, git hash: 0.739.0.7390687 ...Done!
+",
+                "
+",
+                "New StudioBeta version-637cf81b9e084588 at 1/20/2017 1:56:22 AM, file version: 0, 274, 0, 101540...Done!
+",
+                "Revert Studio version-48a14a101efa4802 at 1/30/2013 4:09:49 PM...Done!
+",
+                "New Studio version-a9a2351562de41c8 at 5/24/2021 3:14:21 PM, file version: 0, 480, 0, 423050, git hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ...Done!
+",
+                "New Studio version-4c966efb76b842b0 at 6/29/2012 1:13:09 AM, file version: 0, 65, 0, 596...Done!
+",
+                "New Studio version-deadbeefdeadbeef at 6/30/2012 1:13:09 AM, file version: 0, 66, 0, 600...Error!
+",
+                "New Studio version-hidden at 9/8/2026 10:20:11 AM, file version: 0, 738, 0, 7381393, git hash: 0.738.0.7381393 ...Done!
+"
+            ),
+            "Studio",
+        );
+
+        let versions = history.iter().map(|build| build.version.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            versions,
+            ["0.738.0.7381393", "0.65.0.596", "0.480.0.423050", "0.739.0.7390687"]
+        );
+        assert_eq!(history[3].published_at, "2026-09-14T16:07:58");
+    }
+
+    #[test]
+    fn parses_recent_build_history_by_file_version() {
         let history = parse_deploy_history(
             concat!(
                 "New Studio64 version-older-guid at 4/14/2026 10:05:34 AM, file version: 0, 717, 0, 7170978, git hash: 0.717.0.7170978 ...\n",
@@ -387,16 +424,9 @@ mod tests {
         );
 
         assert_eq!(history.len(), 3);
-        assert_eq!(history[0].version_guid, "recent-guid");
         assert_eq!(history[0].version, "0.718.0.7181104");
-        assert_eq!(history[1].version_guid, "hidden");
-        assert_eq!(history[2].version_guid, "older-guid");
-    }
-
-    #[test]
-    fn normalizes_setup_version_guids() {
-        assert_eq!(normalize_version_guid("recent-guid"), "version-recent-guid");
-        assert_eq!(normalize_version_guid("version-recent-guid"), "version-recent-guid");
-        assert!(same_version_guid("recent-guid", "version-recent-guid"));
+        assert_eq!(history[0].published_at, "2026-04-21T13:48:11");
+        assert_eq!(history[1].version, "0.717.0.7170982");
+        assert_eq!(history[2].version, "0.717.0.7170978");
     }
 }

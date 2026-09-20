@@ -228,14 +228,14 @@ async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineS
         EngineScanSource::RemoteOnly
     };
     let mut last_scanned_at = None;
-    let mut last_scanned_version_guid = None;
+    let mut last_scanned_version = None;
     let mut scanned_flags = Vec::new();
 
     if let Some(target) = target.as_ref() {
         match get_scan_cache_for_target(paths, target, force_rescan).await {
             Ok(Some(cache)) => {
                 last_scanned_at = Some(cache.scanned_at.clone());
-                last_scanned_version_guid = Some(cache.version_guid.clone());
+                last_scanned_version = Some(cache.version.clone());
                 scanned_flags = cache.flags;
                 scan_source = if force_rescan {
                     EngineScanSource::Fresh
@@ -277,7 +277,7 @@ async fn build_engine_state(paths: &Paths, force_rescan: bool) -> Result<EngineS
             source: scan_source,
             target_installation_id: target.as_ref().map(|entry| entry.id.to_string()),
             target_version: target.as_ref().and_then(|entry| entry.version.clone()),
-            last_scanned_version_guid,
+            last_scanned_version,
             last_scanned_at,
             warning,
         },
@@ -360,7 +360,7 @@ fn build_flag_records(
 
 fn scan_cache_key(installation: &StudioInstallation) -> String {
     installation
-        .version_guid
+        .version
         .clone()
         .unwrap_or_else(|| installation.id.as_str().replace([':', '/', '\\'], "_"))
 }
@@ -383,7 +383,7 @@ async fn get_scan_cache_for_target(
         .context("engine flag scan task failed to join")??;
 
     let cache = EngineScanCache {
-        version_guid: scan_cache_key(target),
+        cache_key: scan_cache_key(target),
         version: target.version.clone().unwrap_or_default(),
         scanned_at: Utc::now().to_rfc3339(),
         flags,
@@ -486,27 +486,27 @@ fn resolve_active_target_guid(paths: &Paths, preferences: &EnginePreferences) ->
 
 fn active_profile<'a>(
     preferences: &'a EnginePreferences,
-    target_version_guid: Option<&str>,
+    target_installation_id: Option<&str>,
 ) -> &'a EngineVersionPreferences {
-    target_version_guid
-        .and_then(|target_version_guid| preferences.version_profiles.get(target_version_guid))
+    target_installation_id
+        .and_then(|target_installation_id| preferences.version_profiles.get(target_installation_id))
         .unwrap_or(&preferences.default_profile)
 }
 
 fn active_profile_mut<'a>(
     preferences: &'a mut EnginePreferences,
-    target_version_guid: Option<&str>,
+    target_installation_id: Option<&str>,
 ) -> &'a mut EngineVersionPreferences {
-    if let Some(target_version_guid) = target_version_guid {
+    if let Some(target_installation_id) = target_installation_id {
         let fallback_profile = preferences
             .version_profiles
-            .get(target_version_guid)
+            .get(target_installation_id)
             .cloned()
             .unwrap_or_else(|| preferences.default_profile.clone());
 
         return preferences
             .version_profiles
-            .entry(target_version_guid.to_string())
+            .entry(target_installation_id.to_string())
             .or_insert(fallback_profile);
     }
 

@@ -134,7 +134,6 @@ mod tests {
             installation.executable,
             bundle.join("Contents/MacOS/RobloxStudio")
         );
-        assert!(installation.version_guid.is_none());
         assert_eq!(installation.install_dir, bundle);
         assert!(installation.capabilities.contains(Capabilities::LAUNCH));
         assert!(!installation.capabilities.contains(Capabilities::MODS));

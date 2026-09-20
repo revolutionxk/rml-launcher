@@ -17,11 +17,10 @@ impl StudioDeployment for WindowsDeployment {
         sink: &S,
         install_dir: PathBuf,
         download_dir: PathBuf,
-        version_guid: &str,
         version: &str,
         channel: &str,
         published_at: Option<&str>,
     ) -> impl Future<Output = Result<InstalledStudioManifest>> + Send {
-        install_version(sink, install_dir, download_dir, version_guid, version, channel, published_at)
+        install_version(sink, install_dir, download_dir, version, channel, published_at)
     }
 }

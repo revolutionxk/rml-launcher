@@ -64,9 +64,8 @@ fn scan_root(source: InstallationSource, root: &Path) -> Vec<StudioInstallation>
                 return None;
             }
 
-            let guid = install_dir.file_name()?.to_string_lossy().into_owned();
-            let mut installation = StudioInstallation::new(source, &guid, install_dir, executable);
-            installation.version_guid = Some(guid);
+            let key = install_dir.file_name()?.to_string_lossy().into_owned();
+            let mut installation = StudioInstallation::new(source, &key, install_dir, executable);
             installation.capabilities = Capabilities::DETECTED;
 
             Some(installation)
@@ -95,7 +94,6 @@ mod tests {
         let found = scan_root(InstallationSource::Bloxstrap, &root);
 
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].version_guid.as_deref(), Some("version-abc123"));
         assert_eq!(found[0].id.as_str(), "bloxstrap:version-abc123");
         assert_eq!(found[0].executable, version.join(STUDIO_EXECUTABLE));
         assert!(!found[0].capabilities.contains(Capabilities::UNINSTALL));

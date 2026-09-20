@@ -105,7 +105,7 @@ const EMPTY_SCAN_INFO: EngineScanInfo = {
   source: "unavailable",
   targetInstallationId: null,
   targetVersion: null,
-  lastScannedVersionGuid: null,
+  lastScannedVersion: null,
   lastScannedAt: null,
   warning: null,
 };

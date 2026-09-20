@@ -14,8 +14,8 @@ pub fn scan_cache_dir(paths: &Paths) -> PathBuf {
     engine_root_dir(paths).join("scans")
 }
 
-pub fn scan_cache_path(paths: &Paths, version_guid: &str) -> PathBuf {
-    scan_cache_dir(paths).join(format!("{version_guid}.json"))
+pub fn scan_cache_path(paths: &Paths, cache_key: &str) -> PathBuf {
+    scan_cache_dir(paths).join(format!("{cache_key}.json"))
 }
 
 pub fn client_settings_dir(install_dir: &Path) -> PathBuf {

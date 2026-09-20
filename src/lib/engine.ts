@@ -19,7 +19,7 @@ export interface EngineScanInfo {
   source: EngineScanSource;
   targetInstallationId: string | null;
   targetVersion: string | null;
-  lastScannedVersionGuid: string | null;
+  lastScannedVersion: string | null;
   lastScannedAt: string | null;
   warning: string | null;
 }

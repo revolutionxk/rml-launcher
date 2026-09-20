@@ -86,7 +86,7 @@ fn select(installations: Vec<StudioInstallation>, id: &str) -> Option<StudioInst
         .or_else(|| {
             installations
                 .iter()
-                .position(|installation| installation.version_guid.as_deref() == Some(id))
+                .position(|installation| installation.version.as_deref() == Some(id))
         })?;
 
     installations.into_iter().nth(matched)
@@ -181,21 +181,21 @@ mod tests {
     }
 
     #[test]
-    fn resolution_falls_back_to_a_bare_version_guid_for_migrated_preferences() {
+    fn resolution_falls_back_to_a_bare_version_for_migrated_preferences() {
         let mut managed = installation(InstallationSource::Managed, "/managed/a");
-        managed.version_guid = Some("version-legacy".into());
+        managed.version = Some("0.730.0.7300790".into());
 
-        let found = select(vec![managed], "version-legacy").unwrap();
+        let found = select(vec![managed], "0.730.0.7300790").unwrap();
 
         assert_eq!(found.source, InstallationSource::Managed);
     }
 
     #[test]
-    fn resolution_prefers_an_exact_id_over_a_version_guid_match() {
+    fn resolution_prefers_an_exact_id_over_a_version_match() {
         let mut managed = installation(InstallationSource::Managed, "/managed/a");
-        managed.version_guid = Some("version-shared".into());
+        managed.version = Some("0.730.0.7300790".into());
         let mut bloxstrap = installation(InstallationSource::Bloxstrap, "/bloxstrap/b");
-        bloxstrap.version_guid = Some("version-shared".into());
+        bloxstrap.version = Some("0.730.0.7300790".into());
         let wanted = bloxstrap.id.as_str().to_owned();
 
         let found = select(vec![managed, bloxstrap], &wanted).unwrap();
