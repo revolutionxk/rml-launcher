@@ -5,7 +5,8 @@ export type ModLoaderChannel =
   | "beta"
   | "nightly"
   | "experimental"
-  | "prerelease";
+  | "prerelease"
+  | "local";
 
 export type ModLoaderPhase =
   | "resolving"
@@ -71,6 +72,10 @@ export async function getModLoaderStatus(installationId: string) {
 
 export async function installModLoader(installationId: string, tag: string) {
   return invoke<ModLoaderInstalled>("install_modloader", { installationId, tag });
+}
+
+export async function installModLoaderFromFile(installationId: string, sourcePath: string) {
+  return invoke<ModLoaderInstalled>("install_modloader_from_file", { installationId, sourcePath });
 }
 
 export async function uninstallModLoader(installationId: string) {

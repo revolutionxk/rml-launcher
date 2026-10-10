@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ExternalLink, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { ExternalLink, FolderOpen, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import { useI18n } from "@/i18n";
 import { formatBytes, getErrorMessage } from "@/lib/format";
 import {
   installModLoader,
+  installModLoaderFromFile,
   isModLoaderUpdateAvailable,
   MODLOADER_INSTALL_EVENT,
   type ModLoaderChannel,
@@ -32,6 +34,7 @@ const CHANNEL_VARIANTS: Record<ModLoaderChannel, "blue" | "green" | "yellow" | "
     nightly: "purple",
     experimental: "blue",
     prerelease: "gray",
+    local: "gray",
   };
 
 interface ModLoaderPanelProps {
@@ -46,6 +49,7 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [isUninstalling, setIsUninstalling] = useState(false);
+  const [isInstallingFile, setIsInstallingFile] = useState(false);
   const [activeInstall, setActiveInstall] = useState<ModLoaderInstallProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -55,7 +59,7 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
     activeInstall !== null &&
     activeInstall.phase !== "completed" &&
     activeInstall.phase !== "failed";
-  const isBusy = isInstalling || isUninstalling;
+  const isBusy = isInstalling || isUninstalling || isInstallingFile;
 
   const selectedRelease = useMemo(
     () => releases.find((release) => release.tag === selectedTag) ?? null,
@@ -133,6 +137,33 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
     }
   };
 
+  const handleInstallFromFile = async () => {
+    setErrorMessage(null);
+    try {
+      const selection = await open({
+        multiple: false,
+        filters: [{ name: t("modloader-filter-bundle"), extensions: ["zip"] }],
+      });
+
+      if (typeof selection !== "string") {
+        return;
+      }
+
+      setIsInstallingFile(true);
+      await installModLoaderFromFile(installationId, selection);
+      await invalidate();
+    } catch (error) {
+      setErrorMessage(
+        t("modloader-error-install", {
+          message: getErrorMessage(error, t("modloader-error-load")),
+        }),
+      );
+    } finally {
+      setIsInstallingFile(false);
+      setActiveInstall(null);
+    }
+  };
+
   const handleUninstall = async () => {
     setIsUninstalling(true);
     setErrorMessage(null);
@@ -165,6 +196,14 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
       : null;
   const phaseLabel = activeInstall ? t(`modloader-phase-${activeInstall.phase}`) : "";
   const collapsed = installed !== null && !manage && !isBusy && !activeInstall && !errorMessage;
+  const installFromFileButton = (
+    <Button.Root variant="ghost" disabled={isBusy} onClick={() => void handleInstallFromFile()}>
+      <Button.Icon>
+        {isInstallingFile ? <RefreshCw size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+      </Button.Icon>
+      <Button.Label>{t("modloader-install-from-file")}</Button.Label>
+    </Button.Root>
+  );
 
   return (
     <Card.Root highlighted={installed !== null}>
@@ -209,7 +248,10 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
             {t("modloader-loading")}
           </div>
         ) : releases.length === 0 ? (
-          <div className="text-[12px] text-text-muted">{t("modloader-empty")}</div>
+          <>
+            <div className="text-[12px] text-text-muted">{t("modloader-empty")}</div>
+            <div>{installFromFileButton}</div>
+          </>
         ) : collapsed && installed ? (
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm icon-box--green">
@@ -341,6 +383,8 @@ export function ModLoaderPanel({ installationId, installed }: ModLoaderPanelProp
                 </Button.Icon>
                 <Button.Label>{installLabel}</Button.Label>
               </Button.Root>
+
+              {installFromFileButton}
 
               {selectedRelease && (
                 <Button.Root

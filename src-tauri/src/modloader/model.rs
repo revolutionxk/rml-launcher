@@ -10,6 +10,7 @@ pub enum ModLoaderChannel {
     Nightly,
     Experimental,
     Prerelease,
+    Local,
 }
 
 impl ModLoaderChannel {

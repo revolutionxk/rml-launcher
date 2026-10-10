@@ -13,7 +13,7 @@ use crate::{studio::loader_payload_dir, AppError, CommandResult};
 
 pub use self::model::{ModEntry, ModsResponse};
 
-const MODLOADER_DIR: &str = "RobloxModLoader";
+pub(crate) const MODLOADER_DIR: &str = "RobloxModLoader";
 const MODS_DIR: &str = "mods";
 const DISABLED_DIR: &str = "disabled-mods";
 
