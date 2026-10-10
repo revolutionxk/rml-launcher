@@ -59,6 +59,7 @@ pub fn run() {
             modloader::list_modloader_releases,
             modloader::get_modloader_status,
             modloader::install_modloader,
+            modloader::install_modloader_from_file,
             modloader::uninstall_modloader,
             mods::list_mods,
             mods::set_mod_enabled,

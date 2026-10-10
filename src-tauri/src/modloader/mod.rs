@@ -1,6 +1,7 @@
 mod activation;
 mod api;
 mod installer;
+mod local;
 mod model;
 mod paths;
 mod reconcile;
@@ -21,7 +22,7 @@ use self::{
     activation::{activation, ActivationContext},
     installer::{install_release, remove_payload, InstallProgressSink, INSTALL_EVENT},
     model::{ModLoaderInstallProgress, ModLoaderPayload},
-    paths::release_cache_dir,
+    paths::{cache_dir, release_cache_dir},
     storage::{load_manifest, load_subscriptions, remove_manifest, save_subscriptions},
 };
 
@@ -82,6 +83,40 @@ pub async fn install_modloader(
 
     activate_loader(&installation).await?;
     subscribe(&paths, installation.source, payload).await?;
+
+    Ok(manifest)
+}
+
+#[tauri::command]
+pub async fn install_modloader_from_file(
+    app: AppHandle,
+    state: State<'_, ModLoaderState>,
+    installation_id: String,
+    source_path: String,
+) -> CommandResult<ModLoaderInstalled> {
+    let _guard = state
+        .install_lock
+        .try_lock()
+        .map_err(|_| AppError::Failed("A mod loader operation is already in progress.".into()))?;
+
+    info!(installation_id, source_path, "installing a mod loader bundle from disk into Studio version");
+
+    let paths = Paths::resolve(&app)?;
+    let installation = resolve_installation(&app, &installation_id)?;
+    let payload_dir = installation.payload_dir();
+    let cache_root = cache_dir(&paths);
+
+    let staging_root = cache_root.clone();
+    let payload =
+        tokio::task::spawn_blocking(move || local::stage_bundle(Path::new(&source_path), &staging_root)).await??;
+    let cache_dir = release_cache_dir(&paths, &payload.tag);
+
+    let sink = EventSink { app: &app };
+    let manifest = install_release(&sink, cache_dir, &payload, &installation_id, &payload_dir).await?;
+
+    activate_loader(&installation).await?;
+    subscribe(&paths, installation.source, payload).await?;
+    local::prune_unreferenced(&cache_root, &load_subscriptions(&paths)?);
 
     Ok(manifest)
 }

@@ -2,7 +2,7 @@ use std::{
     collections::BTreeSet,
     fs,
     io::{self, BufReader, Read},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use anyhow::{bail, Context, Result};
@@ -110,6 +110,13 @@ async fn download_bundle<S: InstallProgressSink>(
         info!(tag = %release.tag, "reusing verified cached mod loader bundle");
         reporter.emit(ModLoaderPhase::Downloading, release.asset.size, None);
         return Ok(());
+    }
+
+    if release.asset.download_url.is_empty() {
+        bail!(
+            "{} is no longer in the launcher cache; install the mod loader from the file again",
+            release.asset.name,
+        );
     }
 
     ensure_trusted_download(&release.asset.download_url)?;
@@ -244,11 +251,8 @@ fn read_top_level_entries_blocking(bundle_path: &Path) -> Result<Vec<String>> {
             continue;
         };
 
-        if let Some(first) = enclosed.components().next() {
-            let root = first.as_os_str().to_string_lossy().to_string();
-            if !root.is_empty() {
-                roots.insert(root);
-            }
+        if let Some(root) = top_level_name(&enclosed) {
+            roots.insert(root);
         }
     }
 
@@ -257,6 +261,13 @@ fn read_top_level_entries_blocking(bundle_path: &Path) -> Result<Vec<String>> {
     }
 
     Ok(roots.into_iter().collect())
+}
+
+pub(super) fn top_level_name(entry: &Path) -> Option<String> {
+    entry.components().find_map(|component| match component {
+        Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+        _ => None,
+    })
 }
 
 async fn extract_bundle(bundle_path: &Path, payload_dir: &Path) -> Result<()> {
