@@ -62,6 +62,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: C++ formatting
+        if: runner.os == 'macOS'
+        run: |
+          brew install clang-format
+          bash packages/rml_native/tool/clang-format-check.sh
       - run: cmake -S packages/rml_native -B build/native -DRML_NATIVE_TESTS=ON -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build/native --config Release
       - run: ctest --test-dir build/native -C Release --output-on-failure
