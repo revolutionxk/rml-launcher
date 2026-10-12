@@ -1,0 +1,89 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:rml_launcher/app.dart';
+import 'package:rml_launcher/core/di/providers.dart';
+import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/features/shell/view/app_shell.dart';
+import 'package:rml_launcher/i18n/translations.g.dart';
+
+import '../../support/fake_window_chrome.dart';
+import '../../support/test_dependencies.dart';
+
+void main() {
+  late FakeWindowChrome chrome;
+
+  setUp(() => chrome = FakeWindowChrome());
+
+  Future<void> pumpApp(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(1180, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDependenciesProvider.overrideWithValue(
+            testDependencies(windowChrome: chrome),
+          ),
+        ],
+        child: TranslationProvider(child: const RmlApp()),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('opens on Home and navigates from the sidebar', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+    expect(find.text('Home'), findsNWidgets(2));
+    await tester.tap(find.text('Library'));
+    await tester.pumpAndSettle();
+    expect(find.text('Library'), findsNWidgets(2));
+  });
+
+  testWidgets('control K opens Search', (WidgetTester tester) async {
+    await pumpApp(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Search'), findsNWidgets(2));
+  });
+
+  testWidgets('window buttons drive the window on Windows', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+    await tester.tap(find.bySemanticsLabel('Minimize'));
+    await tester.tap(find.bySemanticsLabel('Maximize'));
+    await tester.tap(find.bySemanticsLabel('Close'));
+    expect(chrome.minimizes, 1);
+    expect(chrome.maximizes, 1);
+    expect(chrome.closes, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets('macOS leaves the window buttons to the system', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+    expect(find.bySemanticsLabel('Close'), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('mode System follows the OS while the app runs', (
+    WidgetTester tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await pumpApp(tester);
+    expect(
+      RmlTheme.of(tester.element(find.byType(AppShell))).brightness,
+      Brightness.light,
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(
+      RmlTheme.of(tester.element(find.byType(AppShell))).brightness,
+      Brightness.dark,
+    );
+  });
+}

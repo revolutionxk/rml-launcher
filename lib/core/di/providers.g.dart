@@ -50,3 +50,44 @@ final class AppDependenciesProvider
 }
 
 String _$appDependenciesHash() => r'dc9f1075a63063298e1e598956267b34f845d6f1';
+
+@ProviderFor(windowChrome)
+final windowChromeProvider = WindowChromeProvider._();
+
+final class WindowChromeProvider
+    extends $FunctionalProvider<WindowChrome, WindowChrome, WindowChrome>
+    with $Provider<WindowChrome> {
+  WindowChromeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'windowChromeProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$windowChromeHash();
+
+  @$internal
+  @override
+  $ProviderElement<WindowChrome> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  WindowChrome create(Ref ref) {
+    return windowChrome(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WindowChrome value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WindowChrome>(value),
+    );
+  }
+}
+
+String _$windowChromeHash() => r'c344c7f1d7c06d0a428c2f493c66fbd9bbdaa4fc';
