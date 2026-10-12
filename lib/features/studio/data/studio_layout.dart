@@ -57,6 +57,10 @@ final class StudioLayout {
   String payloadDir(StudioBuild build) =>
       os == HostOs.macos ? p.join(build.path, 'Contents', 'MacOS') : build.path;
 
+  String payloadIn(String buildDir) => os == HostOs.macos
+      ? p.join(buildDir, appBundle, 'Contents', 'MacOS')
+      : buildDir;
+
   String studioExecutable(StudioBuild build) => os == HostOs.macos
       ? p.join(build.path, 'Contents', 'MacOS', 'RobloxStudio')
       : p.join(build.path, 'RobloxStudioBeta.exe');

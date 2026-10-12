@@ -204,6 +204,8 @@ final class StudioEngine {
         discovery: discovery,
         updates: updates,
         running: running,
+        hooks: hooks,
+        tasks: tasks,
       ),
       ownedClient: client == null ? http : null,
     );

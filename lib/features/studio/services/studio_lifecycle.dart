@@ -2,8 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/core/storage/file_ops.dart';
+import 'package:rml_launcher/core/tasks/task_center.dart';
+import 'package:rml_launcher/features/studio/data/install/carry_over.dart';
 import 'package:rml_launcher/features/studio/data/studio_layout.dart';
+import 'package:rml_launcher/features/studio/domain/studio_hooks.dart';
 import 'package:rml_launcher/features/studio/services/discovery_service.dart';
 import 'package:rml_launcher/features/studio/services/running_watcher.dart';
 import 'package:rml_launcher/features/studio/services/update_service.dart';
@@ -14,6 +18,8 @@ final class StudioLifecycle {
     required this._discovery,
     required this._updates,
     required this._running,
+    required this._hooks,
+    required this._tasks,
     this.hourly = const Duration(hours: 1),
   });
 
@@ -22,6 +28,8 @@ final class StudioLifecycle {
   final DiscoveryService _discovery;
   final UpdateService _updates;
   final RunningWatcher _running;
+  final StudioHooks _hooks;
+  final TaskCenter _tasks;
   Timer? _timer;
 
   Future<void> start() async {
@@ -56,7 +64,7 @@ final class StudioLifecycle {
       return;
     }
     for (final FileSystemEntity install in installs) {
-      if (install is! Directory) {
+      if (install is! Directory || _tasks.isBusy(p.basename(install.path))) {
         continue;
       }
       try {
@@ -95,10 +103,28 @@ final class StudioLifecycle {
     if (FileSystemEntity.typeSync(target, followLinks: false) ==
         FileSystemEntityType.notFound) {
       await renameWithRetry(entry, target);
-    } else {
+      return;
+    }
+    final String from = _layout.payloadIn(entry.path);
+    final String to = _layout.payloadIn(target);
+    final Result<List<String>> moved = await moveCarryOver(
+      _hooks.carryOver
+          .where((String relative) => _absent(to, relative))
+          .toList(),
+      from: from,
+      to: to,
+    );
+    if (moved.isOk) {
       await deleteQuietly(entry.path);
     }
   }
+
+  static bool _absent(String root, String relative) =>
+      FileSystemEntity.typeSync(
+        p.joinAll(<String>[root, ...relative.split('/')]),
+        followLinks: false,
+      ) ==
+      FileSystemEntityType.notFound;
 
   Future<void> dispose() async {
     _timer?.cancel();

@@ -383,7 +383,7 @@ final class CheckFilesService {
     if (old != null) {
       final Result<List<String>> moved = await moveCarryOver(
         _hooks.carryOver,
-        from: p.join(old, StudioLayout.appBundle, 'Contents', 'MacOS'),
+        from: _layout.payloadIn(old),
         to: _layout.payloadDir(fresh.build),
       );
       if (moved.failureOrNull case final AppFailure failure) {
