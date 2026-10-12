@@ -29,8 +29,8 @@ else()
   target_compile_options(rml_objects PUBLIC -Wall -Wextra)
 endif()
 
-add_library(rml_native SHARED)
-target_link_libraries(rml_native PRIVATE rml_objects)
+add_library(rml_native SHARED $<TARGET_OBJECTS:rml_objects>)
+target_link_libraries(rml_native PRIVATE Threads::Threads)
 
 install(TARGETS rml_native
   RUNTIME DESTINATION lib
