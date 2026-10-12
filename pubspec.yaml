@@ -18,7 +18,6 @@ dependencies:
   slang: ^4.19.2
   slang_flutter: ^4.19.0
 
-  phosphor_flutter: ^2.1.0
   window_manager: ^0.5.2
   path: ^1.9.1
 
@@ -47,3 +46,9 @@ flutter:
         - asset: assets/fonts/SourceCodePro-Regular.ttf
         - asset: assets/fonts/SourceCodePro-Medium.ttf
           weight: 500
+    - family: PhosphorRegular
+      fonts:
+        - asset: assets/fonts/Phosphor-Regular.ttf
+    - family: PhosphorFill
+      fonts:
+        - asset: assets/fonts/Phosphor-Fill.ttf

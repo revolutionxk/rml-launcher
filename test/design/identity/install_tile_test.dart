@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rml_launcher/design/icons/rml_icons.dart';
 import 'package:rml_launcher/design/identity/identity_color.dart';
 import 'package:rml_launcher/design/identity/install_tile.dart';
 import 'package:rml_launcher/design/identity/tile_progress.dart';
@@ -38,7 +39,7 @@ void main() {
         const InstallTile(
           name: 'Legacy',
           color: IdentityColor.teal,
-          glyph: IconData(0xe000, fontFamily: 'Glyphs'),
+          glyph: RmlIcons.clockCounterClockwise,
         ),
       ),
     );
