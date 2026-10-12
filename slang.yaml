@@ -8,3 +8,4 @@ translate_var: t
 enum_name: AppLocale
 class_name: Translations
 string_interpolation: braces
+timestamp: false
