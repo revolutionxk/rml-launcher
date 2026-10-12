@@ -39,4 +39,26 @@ void main() {
     command.clearResult();
     expect(command.result, isNull);
   });
+
+  test('a throwing action becomes an unknown failure', () async {
+    final Command0<int> command = Command0<int>(
+      () async => throw StateError('boom'),
+    );
+
+    await command.execute();
+
+    expect(command.failure, isA<UnknownFailure>());
+    expect(command.running, isFalse);
+  });
+
+  test('an action finishing after dispose does not throw', () async {
+    final Completer<Result<int>> gate = Completer<Result<int>>();
+    final Command0<int> command = Command0<int>(() => gate.future);
+
+    final Future<void> pending = command.execute();
+    command.dispose();
+    gate.complete(const Result<int>.ok(1));
+
+    await expectLater(pending, completes);
+  });
 }

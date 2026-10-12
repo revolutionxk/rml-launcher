@@ -6,6 +6,7 @@ abstract base class Command<T> extends ChangeNotifier {
   Command();
 
   bool _running = false;
+  bool _disposed = false;
   Result<T>? _result;
 
   bool get running => _running;
@@ -20,7 +21,7 @@ abstract base class Command<T> extends ChangeNotifier {
 
   void clearResult() {
     _result = null;
-    notifyListeners();
+    _notify();
   }
 
   Future<void> run(Future<Result<T>> Function() action) async {
@@ -29,12 +30,28 @@ abstract base class Command<T> extends ChangeNotifier {
     }
     _running = true;
     _result = null;
-    notifyListeners();
+    _notify();
 
     try {
       _result = await action();
+    } catch (error, stackTrace) {
+      _result = Result<T>.err(
+        UnknownFailure(cause: error, stackTrace: stackTrace),
+      );
     } finally {
       _running = false;
+      _notify();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) {
       notifyListeners();
     }
   }
