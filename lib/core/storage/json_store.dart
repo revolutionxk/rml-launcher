@@ -24,7 +24,21 @@ final class FileJsonStore implements JsonStore {
   File _file(String name) => File(p.join(directory.path, '$name.json'));
 
   @override
-  Future<Result<JsonMap?>> read(String name) async {
+  Future<Result<JsonMap?>> read(String name) =>
+      _enqueue(name, () => _readNow(name));
+
+  @override
+  Future<Result<void>> write(String name, JsonMap value) =>
+      _enqueue(name, () => _writeNow(name, value));
+
+  Future<T> _enqueue<T>(String name, Future<T> Function() action) {
+    final Future<void> previous = _pending[name] ?? Future<void>.value();
+    final Future<T> outcome = previous.then((_) => action());
+    _pending[name] = outcome.then<void>((_) {}, onError: (_) {});
+    return outcome;
+  }
+
+  Future<Result<JsonMap?>> _readNow(String name) async {
     final File file = _file(name);
     try {
       if (!file.existsSync()) {
@@ -44,31 +58,31 @@ final class FileJsonStore implements JsonStore {
     }
   }
 
-  @override
-  Future<Result<void>> write(String name, JsonMap value) {
-    final Future<void> previous = _pending[name] ?? Future<void>.value();
-    final Future<Result<void>> outcome = previous.then(
-      (_) => _writeNow(name, value),
-    );
-    _pending[name] = outcome.then<void>((_) {}, onError: (_) {});
-    return outcome;
-  }
-
   Future<Result<void>> _writeNow(String name, JsonMap value) async {
     final File file = _file(name);
-    final File temp = File('${file.path}.tmp');
+    final String encoded;
+    try {
+      encoded = const JsonEncoder.withIndent('  ').convert(value);
+    } on JsonUnsupportedObjectError catch (error, stackTrace) {
+      return Result<void>.err(
+        ValidationFailure(
+          message: '$name cannot be encoded as JSON',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+    final File temp = File('${file.path}.$pid.tmp');
     try {
       await directory.create(recursive: true);
       final RandomAccessFile handle = await temp.open(mode: FileMode.write);
       try {
-        await handle.writeString(
-          const JsonEncoder.withIndent('  ').convert(value),
-        );
+        await handle.writeString(encoded);
         await handle.flush();
       } finally {
         await handle.close();
       }
-      await temp.rename(file.path);
+      await _replace(temp, file.path);
       return const Result<void>.ok(null);
     } on FileSystemException catch (error, stackTrace) {
       await _discard(temp);
@@ -77,6 +91,24 @@ final class FileJsonStore implements JsonStore {
       );
     }
   }
+
+  Future<void> _replace(File temp, String target) async {
+    for (int attempt = 1; ; attempt++) {
+      try {
+        await temp.rename(target);
+        return;
+      } on FileSystemException catch (error) {
+        if (attempt == 5 || !_isTransientLock(error)) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 10 << attempt));
+      }
+    }
+  }
+
+  bool _isTransientLock(FileSystemException error) =>
+      Platform.isWindows &&
+      const <int>{5, 32}.contains(error.osError?.errorCode);
 
   Future<void> _discard(File temp) async {
     try {

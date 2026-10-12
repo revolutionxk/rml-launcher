@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,14 @@ void main() {
 
   tearDown(() => root.delete(recursive: true));
 
+  List<String> tempFiles() => store.directory.existsSync()
+      ? store.directory
+            .listSync()
+            .map((FileSystemEntity entry) => p.basename(entry.path))
+            .where((String name) => name.endsWith('.tmp'))
+            .toList()
+      : <String>[];
+
   test('a missing document reads as null', () async {
     final Result<JsonMap?> result = await store.read('settings');
     expect(result.isOk, isTrue);
@@ -37,17 +46,14 @@ void main() {
     await store.write('settings', <String, Object?>{'a': 2});
     final Result<JsonMap?> result = await store.read('settings');
     expect(result.valueOrNull, <String, Object?>{'a': 2});
-    expect(
-      File(p.join(store.directory.path, 'settings.json.tmp')).existsSync(),
-      isFalse,
-    );
+    expect(tempFiles(), isEmpty);
   });
 
   test(
     'a stale temp file from a crash does not block the next write',
     () async {
       await store.directory.create(recursive: true);
-      File(p.join(store.directory.path, 'settings.json.tmp'))
+      File(p.join(store.directory.path, 'settings.json.$pid.tmp'))
           .writeAsStringSync('{"half');
       await store.write('settings', <String, Object?>{'a': 3});
       final Result<JsonMap?> result = await store.read('settings');
@@ -111,10 +117,7 @@ void main() {
       await Future.wait(<Future<Result<void>>>[first, second]);
       final Result<JsonMap?> result = await store.read('settings');
       expect(result.valueOrNull, <String, Object?>{'a': 2});
-      expect(
-        File(p.join(store.directory.path, 'settings.json.tmp')).existsSync(),
-        isFalse,
-      );
+      expect(tempFiles(), isEmpty);
     },
   );
 
@@ -139,9 +142,31 @@ void main() {
       'a': 4,
     });
     expect(result.failureOrNull, isA<IoFailure>());
-    expect(
-      File(p.join(store.directory.path, 'settings.json.tmp')).existsSync(),
-      isFalse,
-    );
+    expect(tempFiles(), isEmpty);
+  });
+
+  test('a read issued after an unawaited write sees that write', () async {
+    unawaited(store.write('settings', <String, Object?>{'a': 5}));
+    final Result<JsonMap?> result = await store.read('settings');
+    expect(result.valueOrNull, <String, Object?>{'a': 5});
+  });
+
+  test('a value that cannot be encoded is a validation failure', () async {
+    final Result<void> result = await store.write('settings', <String, Object?>{
+      'v': double.nan,
+    });
+    expect(result.failureOrNull, isA<ValidationFailure>());
+    expect(tempFiles(), isEmpty);
+  });
+
+  test('the temp file name carries the process id', () async {
+    await store.directory.create(recursive: true);
+    Directory(p.join(store.directory.path, 'settings.json')).createSync();
+    final Result<void> result = await store.write('settings', <String, Object?>{
+      'a': 6,
+    });
+    final IoFailure failure = result.failureOrNull! as IoFailure;
+    final FileSystemException cause = failure.cause! as FileSystemException;
+    expect(p.basename(cause.path!), 'settings.json.$pid.tmp');
   });
 }
