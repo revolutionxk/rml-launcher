@@ -82,8 +82,11 @@ namespace rml::process
 		const auto& targets = search.visible.empty() ? search.other : search.visible;
 		if (targets.empty())
 			return fail("Process " + std::to_string(pid) + " has no window to close");
+		bool posted = false;
 		for (const auto window : targets)
-			PostMessageW(window, WM_CLOSE, 0, 0);
+			posted = PostMessageW(window, WM_CLOSE, 0, 0) || posted;
+		if (!posted)
+			return fail("Couldn't ask process " + std::to_string(pid) + " to close");
 		return {};
 	}
 

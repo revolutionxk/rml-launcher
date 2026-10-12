@@ -39,8 +39,9 @@ namespace rml::process
 		if (ec)
 			return fail("Can't list processes");
 		std::vector<Process> processes;
-		for (const auto& entry : entries)
+		for (const std::filesystem::directory_iterator end; entries != end; entries.increment(ec))
 		{
+			const auto& entry = *entries;
 			const auto name = entry.path().filename().string();
 			if (!is_pid(name))
 				continue;
@@ -48,6 +49,8 @@ namespace rml::process
 			if (!path.empty())
 				processes.push_back({std::stoll(name), std::move(path)});
 		}
+		if (ec)
+			return fail("Can't list processes");
 		return processes;
 	}
 

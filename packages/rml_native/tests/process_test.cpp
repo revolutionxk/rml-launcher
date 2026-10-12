@@ -110,6 +110,10 @@ TEST_CASE("process calls check their arguments")
 	CHECK(rml_processes("RobloxStudioBeta.exe", nullptr) == RML_ERR_INVALID_ARGUMENT);
 	CHECK(rml_process_close(0) == RML_ERR_INVALID_ARGUMENT);
 	CHECK(rml_process_kill(-1) == RML_ERR_INVALID_ARGUMENT);
+	CHECK(rml_process_kill(INT64_C(4294967295)) == RML_ERR_INVALID_ARGUMENT);
+	CHECK(rml_process_kill(INT64_C(1) << 32) == RML_ERR_INVALID_ARGUMENT);
+	CHECK(rml_process_close(INT64_C(4294967295)) == RML_ERR_INVALID_ARGUMENT);
+	CHECK(rml_process_close(INT64_C(1) << 32) == RML_ERR_INVALID_ARGUMENT);
 }
 
 TEST_CASE("an unknown name lists nothing")

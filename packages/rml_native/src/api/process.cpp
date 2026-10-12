@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +23,11 @@ namespace rml::api
 			text += "{\"pid\":" + std::to_string(processes[index].pid) + ",\"path\":" + json::quote(processes[index].path) + "}";
 		}
 		return text + "]";
+	}
+
+	[[nodiscard]] static bool valid_pid(const std::int64_t pid) noexcept
+	{
+		return pid > 0 && pid <= std::numeric_limits<std::int32_t>::max();
 	}
 
 	extern "C"
@@ -41,8 +47,8 @@ namespace rml::api
 		RML_API std::int32_t rml_process_close(const std::int64_t pid)
 		{
 			return guarded([&]() -> Outcome {
-				if (pid <= 0)
-					return invalid_argument("Process id must be positive");
+				if (!valid_pid(pid))
+					return invalid_argument("Process id is out of range");
 				auto closed = process::close(pid);
 				if (!closed)
 					return io_error(std::move(closed.error()));
@@ -53,8 +59,8 @@ namespace rml::api
 		RML_API std::int32_t rml_process_kill(const std::int64_t pid)
 		{
 			return guarded([&]() -> Outcome {
-				if (pid <= 0)
-					return invalid_argument("Process id must be positive");
+				if (!valid_pid(pid))
+					return invalid_argument("Process id is out of range");
 				auto killed = process::kill(pid);
 				if (!killed)
 					return io_error(std::move(killed.error()));
