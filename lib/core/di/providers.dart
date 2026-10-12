@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:rml_launcher/core/di/app_dependencies.dart';
+import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/core/platform/window_chrome.dart';
 
 part 'providers.g.dart';
@@ -11,3 +12,7 @@ AppDependencies appDependencies(Ref ref) =>
 @Riverpod(keepAlive: true)
 WindowChrome windowChrome(Ref ref) =>
     ref.watch(appDependenciesProvider).windowChrome;
+
+@Riverpod(keepAlive: true)
+NativeService nativeService(Ref ref) =>
+    ref.watch(appDependenciesProvider).native;

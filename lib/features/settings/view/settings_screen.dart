@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rml_launcher/core/config/app_info.dart';
+import 'package:rml_launcher/core/di/providers.dart';
 import 'package:rml_launcher/design/components/rml_segmented.dart';
 import 'package:rml_launcher/design/layout/page_scaffold.dart';
 import 'package:rml_launcher/design/theme/rml_theme.dart';
@@ -132,6 +133,17 @@ class SettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 t.settings.appVersion(version: AppInfo.version),
+                style: theme.typography.body.copyWith(
+                  color: theme.colors.text2,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                t.settings.nativeVersion(
+                  version: ref.watch(nativeServiceProvider).version,
+                ),
                 style: theme.typography.body.copyWith(
                   color: theme.colors.text2,
                 ),

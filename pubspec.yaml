@@ -6,6 +6,9 @@ version: 2.0.0-dev+1
 environment:
   sdk: ^3.13.0
 
+workspace:
+  - packages/rml_native
+
 dependencies:
   flutter:
     sdk: flutter
@@ -21,12 +24,15 @@ dependencies:
   window_manager: ^0.5.2
   path: ^1.9.1
 
+  rml_native:
+    path: packages/rml_native
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-  build_runner: ^2.16.2
+  build_runner: ^2.16.1
   riverpod_generator: ^4.0.9
 
 flutter:

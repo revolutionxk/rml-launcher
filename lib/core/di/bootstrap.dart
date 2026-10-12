@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:rml_launcher/core/di/app_dependencies.dart';
+import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/core/platform/app_paths.dart';
 import 'package:rml_launcher/core/platform/window_chrome.dart';
 import 'package:rml_launcher/core/storage/json_store.dart';
@@ -21,5 +22,6 @@ Future<AppDependencies> bootstrap() async {
     settingsRepository: settingsRepository,
     initialSettings: initialSettings,
     windowChrome: const WindowManagerChrome(),
+    native: const RmlNativeService(),
   );
 }

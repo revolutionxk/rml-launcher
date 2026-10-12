@@ -55,4 +55,9 @@ void main() {
     await openSettings(tester);
     expect(find.text('RML Launcher 2.0.0-dev'), findsOneWidget);
   });
+
+  testWidgets('shows the native library version', (WidgetTester tester) async {
+    await openSettings(tester);
+    expect(find.text('Native library 0.1.0'), findsOneWidget);
+  });
 }

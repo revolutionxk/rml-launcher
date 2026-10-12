@@ -91,3 +91,44 @@ final class WindowChromeProvider
 }
 
 String _$windowChromeHash() => r'c344c7f1d7c06d0a428c2f493c66fbd9bbdaa4fc';
+
+@ProviderFor(nativeService)
+final nativeServiceProvider = NativeServiceProvider._();
+
+final class NativeServiceProvider
+    extends $FunctionalProvider<NativeService, NativeService, NativeService>
+    with $Provider<NativeService> {
+  NativeServiceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'nativeServiceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$nativeServiceHash();
+
+  @$internal
+  @override
+  $ProviderElement<NativeService> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  NativeService create(Ref ref) {
+    return nativeService(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(NativeService value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<NativeService>(value),
+    );
+  }
+}
+
+String _$nativeServiceHash() => r'be20be7af18ea40cc83308d8166a156cb4baf352';
