@@ -6,6 +6,8 @@ import 'package:rml_launcher/core/platform/app_paths.dart';
 import 'package:rml_launcher/core/tasks/activity_repository.dart';
 import 'package:rml_launcher/core/tasks/task_center.dart';
 import 'package:rml_launcher/features/studio/data/cdn/cdn_platform.dart';
+import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
+import 'package:rml_launcher/features/studio/data/discovery/vinegar.dart';
 import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
 import 'package:rml_launcher/features/studio/data/install/staging_area.dart';
 import 'package:rml_launcher/features/studio/data/library_store.dart';
@@ -16,12 +18,15 @@ import 'package:rml_launcher/features/studio/domain/studio_hooks.dart';
 import 'package:rml_launcher/features/studio/domain/studio_install.dart';
 import 'package:rml_launcher/features/studio/domain/studio_version.dart';
 import 'package:rml_launcher/features/studio/services/build_fetcher.dart';
+import 'package:rml_launcher/features/studio/services/discovery_service.dart';
 import 'package:rml_launcher/features/studio/services/install_service.dart';
+import 'package:rml_launcher/features/studio/services/launch_service.dart';
 import 'package:rml_launcher/features/studio/services/running_watcher.dart';
 import 'package:rml_launcher/features/studio/services/update_service.dart';
 
 import 'fake_build_installer.dart';
 import 'fake_native_service.dart';
+import 'fake_process_starter.dart';
 import 'fake_studio_cdn.dart';
 import 'memory_json_store.dart';
 import 'studio_library_fixtures.dart';
@@ -127,6 +132,25 @@ final class ServiceHarness {
     hooks: hooks,
     events: events,
     clock: clock,
+  );
+
+  LaunchService launchService(
+    FakeProcessStarter processes, {
+    Map<String, String> environment = const <String, String>{},
+  }) => LaunchService(
+    library: library,
+    tasks: tasks,
+    layout: layout,
+    processes: processes,
+    discovery: DiscoveryService(
+      library: library,
+      providers: const <DiscoveryProvider>[],
+      layout: layout,
+      events: events,
+    ),
+    updates: updateService(),
+    hooks: hooks,
+    vinegar: VinegarLocator(environment: environment, processes: processes),
   );
 
   void runStudioFrom(String path, {int pid = 100}) => native.processes =
