@@ -80,6 +80,29 @@ void main() {
     expect(bytes, payload.length);
   });
 
+  test('concurrent downloads of one file share a single request', () async {
+    final Downloader shared = downloader();
+    int first = 0;
+    int second = 0;
+    final List<Result<void>> results = await Future.wait(<Future<Result<void>>>[
+      shared.download(
+        request(),
+        abort: AbortSignal(),
+        onBytes: (int delta) => first += delta,
+      ),
+      shared.download(
+        request(),
+        abort: AbortSignal(),
+        onBytes: (int delta) => second += delta,
+      ),
+    ]);
+    expect(results.every((Result<void> result) => result.isOk), isTrue);
+    expect(server.hits('setup/pkg.zip'), 1);
+    expect(first, payload.length);
+    expect(second, payload.length);
+    expect(target().readAsBytesSync(), payload);
+  });
+
   test('a verified file is reused without a request', () async {
     target()
       ..parent.createSync(recursive: true)

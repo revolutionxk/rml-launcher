@@ -166,6 +166,43 @@ void main() {
     );
   });
 
+  test('a failed swap puts the previous build back', () async {
+    publishWindowsBuild(harness.server, guid);
+    await install();
+    final String locked = p.join(harness.dir.path, 'locked');
+    final String staging = p.join(locked, 'stage');
+    Directory(staging).createSync(recursive: true);
+    Process.runSync('chmod', <String>['555', locked]);
+    try {
+      final Result<InstalledBuild> result = await harness.staging().commit(
+        installId: 'main',
+        staging: staging,
+        marker: BuildMarker(
+          version: version,
+          binaryTarget: WindowsBuildInstaller.binaryTarget,
+          installedAt: DateTime.utc(2026),
+        ),
+      );
+      expect(result.failureOrNull, isA<IoFailure>());
+    } finally {
+      Process.runSync('chmod', <String>['755', locked]);
+    }
+    expect(File(built('RobloxStudioBeta.exe')).readAsStringSync(), 'studio');
+    expect(
+      Directory(harness.layout.replacedDir('main', version)).existsSync(),
+      isFalse,
+    );
+  }, skip: Platform.isWindows);
+
+  test('a damaged record and marker read as missing', () async {
+    final String dir = p.join(harness.dir.path, 'damaged');
+    Directory(dir).createSync();
+    File(p.join(dir, FileRecord.fileName)).writeAsBytesSync(<int>[0xff, 0xfe]);
+    File(p.join(dir, BuildMarker.fileName)).writeAsBytesSync(<int>[0xff, 0xfe]);
+    expect((await FileRecord.read(dir)).packages, isEmpty);
+    expect(await BuildMarker.read(dir), isNull);
+  });
+
   test('the runtime files are listed with their exact content', () {
     final Map<String, String> files = WindowsBuildInstaller.runtimeFiles(
       version,

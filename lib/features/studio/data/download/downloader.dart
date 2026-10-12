@@ -38,7 +38,37 @@ final class Downloader {
   final RetryPolicy _retry;
   final Duration _readTimeout;
 
+  final Map<String, Future<void>> _inFlight = <String, Future<void>>{};
+
   Future<Result<void>> download(
+    DownloadRequest request, {
+    required AbortSignal abort,
+    required void Function(int delta) onBytes,
+  }) async {
+    final Future<void>? previous = _inFlight[request.path];
+    final Completer<void> done = Completer<void>();
+    _inFlight[request.path] = done.future;
+    try {
+      if (previous != null) {
+        await Future.any(<Future<void>>[previous, abort.whenAborted]);
+        if (abort.isAborted) {
+          return const Result<void>.err(CancelledFailure());
+        }
+      }
+      return await _download(request, abort: abort, onBytes: onBytes);
+    } finally {
+      unawaited(
+        (previous ?? Future<void>.value()).then((_) {
+          done.complete();
+          if (identical(_inFlight[request.path], done.future)) {
+            _inFlight.remove(request.path);
+          }
+        }),
+      );
+    }
+  }
+
+  Future<Result<void>> _download(
     DownloadRequest request, {
     required AbortSignal abort,
     required void Function(int delta) onBytes,

@@ -37,6 +37,8 @@ final class BuildMarker {
       return fromJson(jsonDecode(await file.readAsString()));
     } on FormatException {
       return null;
+    } on FileSystemException {
+      return null;
     }
   }
 

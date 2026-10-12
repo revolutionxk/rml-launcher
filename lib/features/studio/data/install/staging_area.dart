@@ -41,6 +41,10 @@ final class StagingArea {
     final String staging = _layout.stagingDir(installId, version);
     try {
       await deleteQuietly(staging);
+      if (FileSystemEntity.typeSync(staging, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        return Result<String>.err(IoFailure(path: staging));
+      }
       await Directory(staging).create(recursive: true);
       return Result<String>.ok(staging);
     } on FileSystemException catch (error, stackTrace) {
@@ -59,7 +63,13 @@ final class StagingArea {
     final String replaced = _layout.replacedDir(installId, marker.version);
     try {
       await marker.write(staging);
-      String? moved;
+    } on FileSystemException catch (error, stackTrace) {
+      return Result<InstalledBuild>.err(
+        IoFailure(path: staging, cause: error, stackTrace: stackTrace),
+      );
+    }
+    String? moved;
+    try {
       if (Directory(target).existsSync()) {
         await deleteQuietly(replaced);
         await renameWithRetry(Directory(target), replaced);
@@ -79,6 +89,15 @@ final class StagingArea {
         ),
       );
     } on FileSystemException catch (error, stackTrace) {
+      if (moved != null) {
+        try {
+          await renameWithRetry(Directory(moved), target);
+        } on FileSystemException {
+          return Result<InstalledBuild>.err(
+            IoFailure(path: target, cause: error, stackTrace: stackTrace),
+          );
+        }
+      }
       return Result<InstalledBuild>.err(
         IoFailure(path: target, cause: error, stackTrace: stackTrace),
       );

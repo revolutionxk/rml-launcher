@@ -46,6 +46,8 @@ final class FileRecord {
       });
     } on FormatException {
       return const FileRecord(<String, PackageRecord>{});
+    } on FileSystemException {
+      return const FileRecord(<String, PackageRecord>{});
     }
   }
 
