@@ -33,6 +33,8 @@ extern "C"
 
 	typedef void (*rml_text_callback)(int32_t status, char* text);
 
+	typedef void (*rml_progress_callback)(uint64_t done_bytes, uint64_t total_bytes);
+
 	RML_API const char* rml_version(void);
 
 	RML_API const char* rml_last_error(void);
@@ -48,6 +50,7 @@ extern "C"
 	RML_API int32_t rml_os_reduce_motion(void);
 	RML_API int32_t rml_disk_free(const char* path, uint64_t* out_bytes);
 	RML_API int32_t rml_executable_info(const char* path, char** out_json);
+	RML_API int32_t rml_zip_extract_async(const char* archive, const char* destination, rml_progress_callback progress, rml_text_callback done);
 
 #ifdef __cplusplus
 }
