@@ -145,7 +145,8 @@ final class CheckFilesService {
       if (available == null) {
         return Result<CheckReport>.err(free.failureOrNull!);
       }
-      final int needed = ((packed + unpacked) * 1.1).ceil();
+      final int needed =
+          ((packed - _bytesOnDisk(downloads, broken) + unpacked) * 1.1).ceil();
       if (available < needed) {
         return Result<CheckReport>.err(
           InsufficientSpaceFailure(
@@ -309,6 +310,20 @@ final class CheckFilesService {
         },
       ),
     );
+  }
+
+  static int _bytesOnDisk(String downloads, List<PackageEntry> packages) {
+    int total = 0;
+    for (final PackageEntry entry in packages) {
+      final File done = File(p.join(downloads, entry.name));
+      final File partial = File('${done.path}.partial');
+      if (done.existsSync()) {
+        total += done.lengthSync();
+      } else if (partial.existsSync()) {
+        total += partial.lengthSync();
+      }
+    }
+    return total;
   }
 
   static bool _sameBytes(List<int> a, List<int> b) {

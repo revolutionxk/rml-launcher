@@ -163,6 +163,26 @@ void main() {
     expect(File(file('content/avatar/faces/y.png')).existsSync(), isFalse);
   });
 
+  test('archives already downloaded count toward the free space', () async {
+    await start(HostOs.windows);
+    const FixturePackage package = FixturePackage(
+      'content-avatar.zip',
+      <String, String>{'x.png': 'avatar', 'faces/y.png': 'face'},
+    );
+    final List<int> archive = zipOf(package.files);
+    File(file('content/avatar/faces/y.png')).deleteSync();
+    File(p.join(harness.layout.downloadsDir(version), package.name))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(archive);
+    harness.native.freeBytes = (package.unpacked * 1.1).ceil() + 1;
+    expect(
+      harness.native.freeBytes,
+      lessThan(((archive.length + package.unpacked) * 1.1).ceil()),
+    );
+    final Result<CheckReport> result = await service.check('main');
+    expect(result.valueOrNull!.repairedPackages, <String>[package.name]);
+  });
+
   test('checking waits for Studio to close', () async {
     await start(HostOs.windows);
     harness.native.processes = <NativeProcess>[
