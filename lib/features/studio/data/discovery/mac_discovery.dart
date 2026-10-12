@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rml_launcher/core/native/native_service.dart';
+import 'package:rml_launcher/core/result/app_failure.dart';
+import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
 import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
 import 'package:rml_launcher/features/studio/data/process/process_starter.dart';
@@ -58,6 +60,7 @@ final class MacDiscovery implements DiscoveryProvider {
     ];
     final Set<String> seen = <String>{};
     final List<DiscoveredInstall> found = <DiscoveredInstall>[];
+    final Set<String> unreadable = <String>{};
     for (final String candidate in candidates) {
       final String bundle = p.normalize(candidate);
       if (!seen.add(bundle) ||
@@ -65,11 +68,14 @@ final class MacDiscovery implements DiscoveryProvider {
           BuildMarker.existsIn(p.dirname(bundle))) {
         continue;
       }
-      final StudioBuild? build = _read(bundle);
-      if (build != null) {
+      final String id = foundInstallId(InstallSource.macBundle, bundle);
+      final Result<StudioBuild?> read = _read(bundle);
+      if (read.isErr) {
+        unreadable.add(id);
+      } else if (read.valueOrNull case final StudioBuild build) {
         found.add(
           DiscoveredInstall(
-            id: foundInstallId(InstallSource.macBundle, bundle),
+            id: id,
             source: InstallSource.macBundle,
             name: 'Roblox Studio',
             build: build,
@@ -77,7 +83,7 @@ final class MacDiscovery implements DiscoveryProvider {
         );
       }
     }
-    return DiscoveryScan(found: found);
+    return DiscoveryScan(found: found, unreadable: unreadable);
   }
 
   Future<List<String>> _spotlight() async {
@@ -85,7 +91,12 @@ final class MacDiscovery implements DiscoveryProvider {
       spotlightQuery,
     ]);
     if (output.exitCode != 0) {
-      return const <String>[];
+      throw ProcessException(
+        'mdfind',
+        const <String>[spotlightQuery],
+        'Spotlight search failed',
+        output.exitCode,
+      );
     }
     return const LineSplitter()
         .convert(output.stdout)
@@ -94,27 +105,30 @@ final class MacDiscovery implements DiscoveryProvider {
         .toList();
   }
 
-  StudioBuild? _read(String bundle) {
+  Result<StudioBuild?> _read(String bundle) {
     if (!Directory(bundle).existsSync()) {
-      return null;
+      return const Result<StudioBuild?>.ok(null);
     }
-    final ExecutableInfo? info = _native.executableInfo(bundle).valueOrNull;
-    final String? executable = info?.executable;
-    if (info == null ||
-        info.identifier?.toLowerCase() != bundleIdentifier ||
-        executable == null ||
-        executable.isEmpty) {
-      return null;
+    final Result<ExecutableInfo> read = _native.executableInfo(bundle);
+    final ExecutableInfo? info = read.valueOrNull;
+    if (info == null) {
+      return Result<StudioBuild?>.err(read.failureOrNull!);
     }
+    if (info.identifier?.toLowerCase() != bundleIdentifier) {
+      return const Result<StudioBuild?>.ok(null);
+    }
+    final String executable = info.executable ?? '';
     final File binary = File(p.join(bundle, 'Contents', 'MacOS', executable));
     final StudioVersion? version = StudioVersion.tryParse(info.version ?? '');
-    if (!binary.existsSync() || version == null) {
-      return null;
+    if (executable.isEmpty || !binary.existsSync() || version == null) {
+      return Result<StudioBuild?>.err(IoFailure(path: bundle));
     }
-    return StudioBuild(
-      version: version,
-      path: bundle,
-      installedAt: binary.lastModifiedSync(),
+    return Result<StudioBuild?>.ok(
+      StudioBuild(
+        version: version,
+        path: bundle,
+        installedAt: binary.lastModifiedSync().toUtc(),
+      ),
     );
   }
 }

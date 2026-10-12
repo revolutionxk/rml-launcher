@@ -1,14 +1,23 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/design/identity/identity_color.dart';
 import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
+import 'package:rml_launcher/features/studio/data/discovery/mac_discovery.dart';
+import 'package:rml_launcher/features/studio/data/install_repository.dart';
+import 'package:rml_launcher/features/studio/data/library_store.dart';
+import 'package:rml_launcher/features/studio/data/process/process_starter.dart';
+import 'package:rml_launcher/features/studio/domain/install_ids.dart';
 import 'package:rml_launcher/features/studio/domain/studio_build.dart';
 import 'package:rml_launcher/features/studio/domain/studio_event.dart';
 import 'package:rml_launcher/features/studio/domain/studio_install.dart';
 import 'package:rml_launcher/features/studio/domain/studio_library.dart';
 import 'package:rml_launcher/features/studio/services/discovery_service.dart';
 
+import '../../../support/fake_process_starter.dart';
+import '../../../support/memory_json_store.dart';
 import '../../../support/service_harness.dart';
 import '../../../support/studio_library_fixtures.dart';
 
@@ -152,6 +161,111 @@ void main() {
     Directory(harness.layout.root).deleteSync(recursive: true);
     await discovery.refresh();
     expect(library().byId('main')!.current, good);
+  });
+
+  group('macos bundles', () {
+    late FakeProcessStarter processes;
+
+    setUp(() => processes = FakeProcessStarter());
+
+    String studioBundle(String name) {
+      final String bundle = p.join(harness.dir.path, name, 'RobloxStudio.app');
+      File(p.join(bundle, 'Contents', 'MacOS', 'RobloxStudio'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('bin');
+      harness.native.executables[bundle] = const ExecutableInfo(
+        identifier: 'com.roblox.RobloxStudio',
+        version: '0.700.1',
+        executable: 'RobloxStudio',
+      );
+      return bundle;
+    }
+
+    void spotlight({int exitCode = 0, String found = ''}) =>
+        processes.outputs['mdfind ${MacDiscovery.spotlightQuery}'] =
+            ProcessOutput(exitCode: exitCode, stdout: found);
+
+    DiscoveryService macDiscovery(
+      LibraryStore library, {
+      List<String> searchPaths = const <String>[],
+    }) => DiscoveryService(
+      library: library,
+      providers: <DiscoveryProvider>[
+        MacDiscovery(
+          searchPaths: searchPaths,
+          native: harness.native,
+          processes: processes,
+          studioRoot: harness.layout.root,
+        ),
+      ],
+      layout: harness.layout,
+      events: harness.events,
+    );
+
+    Future<StudioInstall> renamed(String bundle) async {
+      final String id = foundInstallId(InstallSource.macBundle, bundle);
+      await harness.library.update(
+        (StudioLibrary current) =>
+            current.upsert(current.byId(id)!.copyWith(name: 'Mine')),
+      );
+      return library().byId(id)!;
+    }
+
+    test('a failed spotlight search keeps the bundles it found', () async {
+      final String bundle = studioBundle('Elsewhere');
+      final DiscoveryService discovery = macDiscovery(harness.library);
+      spotlight(found: '$bundle\n');
+      await discovery.refresh();
+      final StudioInstall before = await renamed(bundle);
+      spotlight(exitCode: 1);
+      await discovery.refresh();
+      final StudioInstall after = library().byId(before.id)!;
+      expect(after.name, 'Mine');
+      expect(after.current, before.current);
+      await Future<void>.delayed(Duration.zero);
+      expect(harness.seen.whereType<InstallRemoved>(), isEmpty);
+    });
+
+    test('a bundle whose info cannot be read keeps its install', () async {
+      final String bundle = studioBundle('Applications');
+      final DiscoveryService discovery = macDiscovery(
+        harness.library,
+        searchPaths: <String>[bundle],
+      );
+      spotlight();
+      await discovery.refresh();
+      final StudioInstall before = await renamed(bundle);
+      harness.native.executables.remove(bundle);
+      await discovery.refresh();
+      final StudioInstall after = library().byId(before.id)!;
+      expect(after.name, 'Mine');
+      expect(after.current, before.current);
+      await Future<void>.delayed(Duration.zero);
+      expect(harness.seen.whereType<InstallRemoved>(), isEmpty);
+    });
+
+    test('a refresh that finds nothing new saves nothing', () async {
+      final String bundle = studioBundle('Applications');
+      final MemoryJsonStore store = MemoryJsonStore();
+      final LibraryStore first = await libraryWith(
+        const <StudioInstall>[],
+        store: store,
+      );
+      spotlight();
+      await macDiscovery(first, searchPaths: <String>[bundle]).refresh();
+      expect(first.value.installs, hasLength(1));
+      final int writes = store.writes;
+      await macDiscovery(first, searchPaths: <String>[bundle]).refresh();
+      expect(store.writes, writes);
+      await first.close();
+      final LibraryStore reopened = await LibraryStore.open(
+        InstallRepository(store),
+      );
+      addTearDown(reopened.close);
+      await macDiscovery(reopened, searchPaths: <String>[bundle]).refresh();
+      expect(reopened.value.installs, hasLength(1));
+      expect(store.writes, writes);
+    });
   });
 
   test('a managed build without its marker is cleared', () async {

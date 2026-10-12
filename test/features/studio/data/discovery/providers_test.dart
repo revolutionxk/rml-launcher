@@ -8,6 +8,7 @@ import 'package:rml_launcher/features/studio/data/discovery/mac_discovery.dart';
 import 'package:rml_launcher/features/studio/data/discovery/vinegar.dart';
 import 'package:rml_launcher/features/studio/data/discovery/windows_discovery.dart';
 import 'package:rml_launcher/features/studio/data/process/process_starter.dart';
+import 'package:rml_launcher/features/studio/domain/install_ids.dart';
 import 'package:rml_launcher/features/studio/domain/studio_install.dart';
 
 import '../../../../support/fake_native_service.dart';
@@ -147,6 +148,11 @@ void main() {
       studioRoot: path('Studio'),
     );
 
+    setUp(
+      () => processes.outputs['mdfind ${MacDiscovery.spotlightQuery}'] =
+          const ProcessOutput(exitCode: 0),
+    );
+
     test('finds studio bundles from fixed places and spotlight', () async {
       final String fixed = bundle('Applications/RobloxStudio.app');
       final String spotted = bundle('Elsewhere/Studio Beta.app');
@@ -173,13 +179,43 @@ void main() {
       expect((await discovery(<String>[managed]).scan()).found, isEmpty);
     });
 
-    test('other apps and bundles without an executable are skipped', () async {
-      final String handler = bundle(
-        'Applications/Handler.app',
-        identifier: 'com.Roblox.StudioProtocolHandler',
+    test(
+      'other apps are skipped, a studio missing its binary is unreadable',
+      () async {
+        final String handler = bundle(
+          'Applications/Handler.app',
+          identifier: 'com.Roblox.StudioProtocolHandler',
+        );
+        final String empty = bundle(
+          'Applications/Empty.app',
+          executable: false,
+        );
+        final DiscoveryScan scan = await discovery(<String>[handler, empty])
+            .scan();
+        expect(scan.found, isEmpty);
+        expect(scan.unreadable, <String>{
+          foundInstallId(InstallSource.macBundle, empty),
+        });
+      },
+    );
+
+    test('a bundle whose info cannot be read is unreadable', () async {
+      final String studio = bundle('Applications/RobloxStudio.app');
+      native.executables.remove(studio);
+      final DiscoveryScan scan = await discovery(<String>[studio]).scan();
+      expect(scan.found, isEmpty);
+      expect(scan.unreadable, <String>{
+        foundInstallId(InstallSource.macBundle, studio),
+      });
+    });
+
+    test('a failed spotlight search fails the whole scan', () async {
+      processes.outputs['mdfind ${MacDiscovery.spotlightQuery}'] =
+          const ProcessOutput(exitCode: -1);
+      await expectLater(
+        discovery(<String>[bundle('Applications/RobloxStudio.app')]).scan(),
+        throwsA(isA<ProcessException>()),
       );
-      final String empty = bundle('Applications/Empty.app', executable: false);
-      expect((await discovery(<String>[handler, empty]).scan()).found, isEmpty);
     });
   });
 

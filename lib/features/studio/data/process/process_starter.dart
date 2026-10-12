@@ -23,9 +23,9 @@ abstract interface class ProcessStarter {
 }
 
 final class SystemProcessStarter implements ProcessStarter {
-  const SystemProcessStarter();
+  const SystemProcessStarter({this.timeout = const Duration(seconds: 10)});
 
-  static const Duration _runTimeout = Duration(seconds: 10);
+  final Duration timeout;
 
   @override
   Future<Result<void>> startDetached(
@@ -50,23 +50,22 @@ final class SystemProcessStarter implements ProcessStarter {
 
   @override
   Future<ProcessOutput> run(String executable, List<String> arguments) async {
-    Process process;
+    final Process process;
     try {
       process = await Process.start(executable, arguments);
     } on ProcessException {
       return const ProcessOutput(exitCode: -1);
     }
+    unawaited(process.stderr.drain<void>());
     try {
-      final Future<String> out = process.stdout
-          .transform(const Utf8Decoder())
-          .join();
-      unawaited(process.stderr.drain<void>());
-      final int code = await process.exitCode.timeout(_runTimeout);
-      return ProcessOutput(exitCode: code, stdout: await out);
+      final (int code, String out) = await (
+        process.exitCode,
+        process.stdout
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .join(),
+      ).wait.timeout(timeout);
+      return ProcessOutput(exitCode: code, stdout: out);
     } on TimeoutException {
-      process.kill();
-      return const ProcessOutput(exitCode: -1);
-    } on FormatException {
       process.kill();
       return const ProcessOutput(exitCode: -1);
     }
