@@ -1,0 +1,213 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:rml_launcher/core/async/abort_signal.dart';
+import 'package:rml_launcher/core/native/native_service.dart';
+import 'package:rml_launcher/core/net/http.dart';
+import 'package:rml_launcher/core/net/retry.dart';
+import 'package:rml_launcher/core/result/app_failure.dart';
+import 'package:rml_launcher/core/result/result.dart';
+import 'package:rml_launcher/features/studio/data/download/download_limiter.dart';
+
+final class DownloadRequest {
+  const DownloadRequest({
+    required this.url,
+    required this.path,
+    this.size,
+    this.md5,
+  });
+
+  final Uri url;
+  final String path;
+  final int? size;
+  final String? md5;
+}
+
+final class Downloader {
+  Downloader({
+    required this._client,
+    required this._native,
+    required this._limiter,
+    this._retry = RetryPolicy.standard,
+    this._readTimeout = readTimeout,
+  });
+
+  final HttpClient _client;
+  final NativeService _native;
+  final DownloadLimiter _limiter;
+  final RetryPolicy _retry;
+  final Duration _readTimeout;
+
+  Future<Result<void>> download(
+    DownloadRequest request, {
+    required AbortSignal abort,
+    required void Function(int delta) onBytes,
+  }) async {
+    int reported = 0;
+    void sync(int onDisk) {
+      onBytes(onDisk - reported);
+      reported = onDisk;
+    }
+
+    final File target = File(request.path);
+    if (await _isVerified(target, request)) {
+      sync(target.lengthSync());
+      return const Result<void>.ok(null);
+    }
+    return withRetry(
+      _retry,
+      () => _limiter.run(() => _attempt(request, abort, sync)),
+      abort: abort,
+      retryable: _retryable,
+    );
+  }
+
+  static bool _retryable(AppFailure failure) =>
+      failure is IntegrityFailure ||
+      (failure is NetworkFailure &&
+          (failure.statusCode == null ||
+              failure.statusCode == HttpStatus.requestedRangeNotSatisfiable ||
+              isRetryableStatus(failure.statusCode!)));
+
+  Future<bool> _isVerified(File file, DownloadRequest request) async {
+    if (!file.existsSync()) {
+      return false;
+    }
+    final int? size = request.size;
+    final String? md5 = request.md5;
+    bool verified = size == null || file.lengthSync() == size;
+    if (verified && md5 != null) {
+      verified =
+          (await _native.hashFile(HashAlgorithm.md5, file.path)).valueOrNull ==
+          md5;
+    }
+    if (!verified) {
+      await file.delete();
+    }
+    return verified;
+  }
+
+  Future<Result<void>> _attempt(
+    DownloadRequest request,
+    AbortSignal abort,
+    void Function(int onDisk) sync,
+  ) async {
+    if (abort.isAborted) {
+      return const Result<void>.err(CancelledFailure());
+    }
+    final File partial = File('${request.path}.partial');
+    try {
+      await partial.parent.create(recursive: true);
+      final int existing = partial.existsSync() ? partial.lengthSync() : 0;
+      sync(existing);
+      final HttpClientRequest pending = await _client.getUrl(request.url);
+      if (existing > 0) {
+        pending.headers.set(HttpHeaders.rangeHeader, 'bytes=$existing-');
+      }
+      unawaited(
+        abort.whenAborted.then((_) => pending.abort(const CancelledFailure())),
+      );
+      final HttpClientResponse response = await pending.close().timeout(
+        _readTimeout,
+        onTimeout: () {
+          pending.abort();
+          throw TimeoutException(null, _readTimeout);
+        },
+      );
+      if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable) {
+        await response.timeout(_readTimeout).drain<void>();
+        if (existing > 0 && existing == request.size) {
+          return await _verify(partial, request, sync);
+        }
+        await partial.delete();
+        sync(0);
+        return const Result<void>.err(
+          NetworkFailure(statusCode: HttpStatus.requestedRangeNotSatisfiable),
+        );
+      }
+      if (response.statusCode != HttpStatus.ok &&
+          response.statusCode != HttpStatus.partialContent) {
+        await response.timeout(_readTimeout).drain<void>();
+        return Result<void>.err(
+          NetworkFailure(statusCode: response.statusCode),
+        );
+      }
+      final bool resumed =
+          response.statusCode == HttpStatus.partialContent && existing > 0;
+      int written = resumed ? existing : 0;
+      sync(written);
+      final RandomAccessFile file = await partial.open(
+        mode: resumed ? FileMode.append : FileMode.write,
+      );
+      try {
+        await for (final List<int> chunk in response.timeout(_readTimeout)) {
+          await file.writeFrom(chunk);
+          written += chunk.length;
+          sync(written);
+        }
+      } finally {
+        await file.close();
+      }
+      return await _verify(partial, request, sync);
+    } on CancelledFailure {
+      return const Result<void>.err(CancelledFailure());
+    } on FileSystemException catch (error, stackTrace) {
+      return Result<void>.err(
+        IoFailure(path: partial.path, cause: error, stackTrace: stackTrace),
+      );
+    } on TimeoutException catch (error, stackTrace) {
+      return Result<void>.err(networkFailureOf(error, stackTrace));
+    } on IOException catch (error, stackTrace) {
+      if (abort.isAborted) {
+        return const Result<void>.err(CancelledFailure());
+      }
+      return Result<void>.err(networkFailureOf(error, stackTrace));
+    }
+  }
+
+  Future<Result<void>> _verify(
+    File partial,
+    DownloadRequest request,
+    void Function(int onDisk) sync,
+  ) async {
+    final int length = partial.lengthSync();
+    final int? size = request.size;
+    if (size != null && length != size) {
+      return _reject(
+        partial,
+        sync,
+        expected: '$size bytes',
+        actual: '$length bytes',
+      );
+    }
+    final String? md5 = request.md5;
+    if (md5 != null) {
+      final Result<String> hash = await _native.hashFile(
+        HashAlgorithm.md5,
+        partial.path,
+      );
+      final String? actual = hash.valueOrNull;
+      if (actual == null) {
+        return Result<void>.err(hash.failureOrNull!);
+      }
+      if (actual != md5) {
+        return _reject(partial, sync, expected: md5, actual: actual);
+      }
+    }
+    await partial.rename(request.path);
+    return const Result<void>.ok(null);
+  }
+
+  Future<Result<void>> _reject(
+    File partial,
+    void Function(int onDisk) sync, {
+    required String expected,
+    required String actual,
+  }) async {
+    await partial.delete();
+    sync(0);
+    return Result<void>.err(
+      IntegrityFailure(expected: expected, actual: actual),
+    );
+  }
+}
