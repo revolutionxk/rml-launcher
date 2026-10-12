@@ -1,6 +1,6 @@
 <p align="center">
   <p align="center">
-    <img width="128" height="128" src="./src-tauri/icons/128x128@2x.png" alt="RML Launcher logo">
+    <img width="128" height="128" src="./assets/brand/source/logo.png" alt="RML Launcher logo">
   </p>
   <h1 align="center"><b>RML Launcher</b></h1>
   <p align="center">
@@ -10,14 +10,12 @@
 
 <div align="center">
 
-![develop build](https://img.shields.io/github/actions/workflow/status/revolutionxk/rml-launcher/ci.yml?style=for-the-badge&branch=develop&logo=github&label=develop%20build)
-![main build](https://img.shields.io/github/actions/workflow/status/revolutionxk/rml-launcher/ci.yml?style=for-the-badge&branch=main&logo=github&label=main%20build)
-![nightly](https://img.shields.io/github/v/release/revolutionxk/rml-launcher?include_prereleases&style=for-the-badge&logo=github&label=release)
+![develop build](https://img.shields.io/github/actions/workflow/status/revolutionxk/rml-launcher/flutter.yml?style=for-the-badge&branch=develop&logo=github&label=develop%20build)
 
 </div>
 
 > [!NOTE]
-> This project is still in development and may contain bugs or incomplete features.
+> This project is still in development and may contain bugs or incomplete features. The launcher is being rebuilt in Flutter, and the features below return as the rewrite lands.
 
 ## Cross-Platform Support
 
@@ -27,26 +25,14 @@
 
 ## What it does
 
-- **Instances** — every installed Roblox Studio build is its own instance with its own mod loader, mods and engine flags. Download, launch, set a default, and configure each one independently.
-- **Mod Loader installer** — install, update or remove [Roblox ModLoader](https://github.com/revolutionxk/roblox-modloader) per instance, straight from GitHub releases. Channels are resolved dynamically (stable, nightly, experimental, …) so new ones appear automatically. Downloads are verified by size and SHA-256.
-- **Mods manager** — import mods from a `.zip` archive or a folder, enable/disable them (without deleting), remove them, and open the mods folder — scoped to each instance.
+- **Studio installs** — every installed Roblox Studio build is its own install with its own mod loader, mods and engine flags. Download, launch, set a default, and configure each one independently.
+- **Mod Loader installer** — install, update or remove [Roblox ModLoader](https://github.com/revolutionxk/roblox-modloader) per install, straight from GitHub releases. Channels are resolved dynamically (stable, nightly, experimental, …) so new ones appear automatically. Downloads are verified by size and SHA-256.
+- **Mods manager** — import mods from a `.zip` archive or a folder, enable/disable them (without deleting), remove them, and open the mods folder — scoped to each install.
 - **Engine / Fast Flags** — search and edit Studio Fast Flags with per-version profiles, type detection (bool / int / string / list), diff against defaults, and snapshot import/export.
-
-## Quick Start
-
-1. Download the latest build from the [Releases page](https://github.com/revolutionxk/rml-launcher/releases):
-   - **Windows** — `.exe` (NSIS) or `.msi`
-   - **macOS** — `.dmg` (universal)
-   - **Linux** — `.AppImage` or `.deb`
-2. Install and open RML Launcher.
-3. Go to **Instances → Add**, install a Studio version, then open the instance to install the **Mod Loader** and your **Mods**.
-4. Launch Studio from the instance — the loader and enabled mods are applied.
-
-> Nightly builds from the `develop` branch are published as a rolling [`nightly`](https://github.com/revolutionxk/rml-launcher/releases/tag/nightly) pre-release for early testing.
 
 ### Linux (Vinegar)
 
-On Linux, Roblox Studio runs through [Vinegar](https://github.com/vinegarhq/vinegar). The launcher replaces the instances list with a single Vinegar surface that:
+On Linux, Roblox Studio runs through [Vinegar](https://github.com/vinegarhq/vinegar). The launcher:
 
 1. installs Vinegar via Flatpak if it is missing,
 2. lets you launch Studio (Vinegar downloads it on first run),
@@ -57,13 +43,13 @@ On Linux, Roblox Studio runs through [Vinegar](https://github.com/vinegarhq/vine
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (package manager and runtime)
-- [Rust](https://www.rust-lang.org/tools/install) (stable) and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
-- On Linux, the system libraries Tauri needs:
+- [Flutter](https://docs.flutter.dev/get-started/install) 3.47
+- [CMake](https://cmake.org/download/) 3.24 or newer
+- A C++20 compiler: Xcode on macOS, Visual Studio 2022 on Windows, GCC or Clang on Linux
+- On Linux, the GTK development files Flutter builds against:
 
   ```bash
-  sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-    libayatana-appindicator3-dev libxdo-dev libssl-dev patchelf
+  sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
   ```
 
 ### Run
@@ -72,45 +58,41 @@ On Linux, Roblox Studio runs through [Vinegar](https://github.com/vinegarhq/vine
 git clone https://github.com/revolutionxk/rml-launcher.git
 cd rml-launcher
 
-bun install
-bun run tauri dev
+flutter pub get
+dart run build_runner build
+dart run slang
+flutter run -d macos
 ```
 
-### Build
-
-```bash
-bun run tauri build
-```
-
-Installers are written to `src-tauri/target/release/bundle/`.
+Use `-d windows` or `-d linux` on those systems. The native library in `packages/rml_native` is built through CMake the first time the app or its tests run.
 
 ### Checks
 
 ```bash
-bun run lint                                   # oxlint
-bunx tsc --noEmit                              # type check
-cargo test --manifest-path src-tauri/Cargo.toml
+flutter analyze
+flutter test
+```
+
+The native library has its own Dart tests and a C++ doctest suite:
+
+```bash
+cd packages/rml_native
+dart test
+cmake -S . -B build/tests -DRML_NATIVE_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build/tests
+ctest --test-dir build/tests --output-on-failure
 ```
 
 ## Tech stack
 
-- [Tauri 2](https://v2.tauri.app/) (Rust) for the native shell and backend
-- [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + [Vite](https://vite.dev/)
-- [TanStack Router](https://tanstack.com/router) and [TanStack Query](https://tanstack.com/query) for routing and cached data
-- [Tailwind CSS](https://tailwindcss.com/) + [Base UI](https://base-ui.com/) + [Motion](https://motion.dev/)
-- [Fluent](https://projectfluent.org/) for localization
+- [Flutter](https://flutter.dev/) with its own widget set, [Riverpod](https://riverpod.dev/) for state, [go_router](https://pub.dev/packages/go_router) for navigation and [slang](https://pub.dev/packages/slang) for English and Brazilian Portuguese
+- A C++20 library, `rml_native`, built with CMake and called through Dart FFI
 
 ## Releases & CI
 
-Releases are published automatically by GitHub Actions:
+Installers and releases come back with the Velopack work.
 
-| Trigger | Result |
-| --- | --- |
-| Push to `develop` | Rebuilds the rolling `nightly` pre-release for all platforms |
-| Version bump merged to `main` | Publishes `vX.Y.Z` if that version was not released yet |
-| Push of a `v*` tag | Publishes that version |
-
-Every pull request and push to `develop`/`main` runs lint, type checks and Rust tests.
+Every pull request and push to `develop`, `main` and `feat/flutter-rewrite` runs analysis, the app and native tests, and a debug build on Windows, macOS and Linux.
 
 ## Contributing
 
