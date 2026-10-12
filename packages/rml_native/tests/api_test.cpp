@@ -1,110 +1,149 @@
-#include <doctest/doctest.h>
+#include "platform/path.hpp"
+#include "rml/rml.h"
 
 #include <chrono>
-#include <cstring>
+#include <cstdint>
+#include <doctest/doctest.h>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <string>
-#include <utility>
+#include <string_view>
+#include <system_error>
 
-#include "rml/rml.h"
+using namespace std::chrono_literals;
 
-namespace {
+namespace
+{
+	struct Reply
+	{
+		std::int32_t status;
+		std::string text;
+	};
 
-std::string utf8(const std::filesystem::path& path) {
-  const std::u8string text = path.u8string();
-  return {text.begin(), text.end()};
+	class TempDirectory
+	{
+	public:
+		explicit TempDirectory(const std::filesystem::path& name) :
+		    m_path(std::filesystem::temp_directory_path() / name)
+		{
+			std::filesystem::create_directories(m_path);
+		}
+
+		TempDirectory(const TempDirectory&) = delete;
+		TempDirectory& operator=(const TempDirectory&) = delete;
+
+		~TempDirectory()
+		{
+			std::error_code ec;
+			std::filesystem::remove_all(m_path, ec);
+		}
+
+		[[nodiscard]] const std::filesystem::path& path() const noexcept
+		{
+			return m_path;
+		}
+
+		[[nodiscard]] std::string write(const std::filesystem::path& name, const std::string_view content) const
+		{
+			const auto file = m_path / name;
+			std::ofstream(file, std::ios::binary) << content;
+			return rml::platform::to_utf8(file);
+		}
+
+	private:
+		std::filesystem::path m_path;
+	};
+
+	std::promise<Reply>* g_pending = nullptr;
+
+	void on_hashed(const std::int32_t status, char* text)
+	{
+		g_pending->set_value({status, text != nullptr ? std::string(text) : std::string()});
+		rml_free(text);
+	}
+
+	[[nodiscard]] Reply hash_file_async(const std::int32_t algorithm, const std::string& path)
+	{
+		std::promise<Reply> promise;
+		g_pending = &promise;
+		auto future = promise.get_future();
+		REQUIRE(rml_hash_file_async(algorithm, path.c_str(), on_hashed) == RML_OK);
+		REQUIRE(future.wait_for(10s) == std::future_status::ready);
+		return future.get();
+	}
+
+	[[nodiscard]] const std::uint8_t* abc() noexcept
+	{
+		return reinterpret_cast<const std::uint8_t*>("abc");
+	}
 }
 
-std::filesystem::path write_file(const std::filesystem::path& path, const std::string& content) {
-  std::filesystem::create_directories(path.parent_path());
-  std::ofstream out(path, std::ios::binary);
-  out << content;
-  return path;
+TEST_CASE("version comes from the build")
+{
+	CHECK(std::string_view(rml_version()) == "0.1.0");
 }
 
-std::promise<std::pair<int32_t, std::string>>* pending = nullptr;
-
-void on_hashed(int32_t status, char* text) {
-  pending->set_value({status, text != nullptr ? std::string(text) : std::string()});
-  rml_free(text);
+TEST_CASE("hashing bytes writes a terminated hex string")
+{
+	char out[65] = {};
+	REQUIRE(rml_hash_bytes(RML_HASH_SHA256, abc(), 3, out, sizeof(out)) == RML_OK);
+	CHECK(std::string_view(out) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 }
 
+TEST_CASE("a small output buffer is rejected with a reason")
+{
+	char out[10] = {};
+	CHECK(rml_hash_bytes(RML_HASH_MD5, abc(), 3, out, sizeof(out)) == RML_ERR_INVALID_ARGUMENT);
+	CHECK(std::string_view(rml_last_error()).find("33") != std::string_view::npos);
 }
 
-TEST_CASE("version comes from the build") {
-  CHECK(std::string(rml_version()) == "0.1.0");
+TEST_CASE("an unknown algorithm is rejected")
+{
+	char out[65] = {};
+	CHECK(rml_hash_bytes(7, nullptr, 0, out, sizeof(out)) == RML_ERR_INVALID_ARGUMENT);
 }
 
-TEST_CASE("hashing bytes writes a terminated hex string") {
-  char out[65] = {};
-  const auto* data = reinterpret_cast<const uint8_t*>("abc");
-  REQUIRE(rml_hash_bytes(RML_HASH_SHA256, data, 3, out, sizeof(out)) == RML_OK);
-  CHECK(std::string(out) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+TEST_CASE("a missing file is an io error")
+{
+	char out[65] = {};
+	CHECK(rml_hash_file(RML_HASH_SHA256, "/definitely/missing/rml.bin", out, sizeof(out)) == RML_ERR_IO);
 }
 
-TEST_CASE("a small output buffer is rejected with a reason") {
-  char out[10] = {};
-  const auto* data = reinterpret_cast<const uint8_t*>("abc");
-  CHECK(rml_hash_bytes(RML_HASH_MD5, data, 3, out, sizeof(out)) == RML_ERR_INVALID_ARGUMENT);
-  CHECK(std::string(rml_last_error()).find("33") != std::string::npos);
+TEST_CASE("a directory is not hashed")
+{
+	const TempDirectory dir("rml native dir");
+	char out[65] = {};
+	CHECK(rml_hash_file(RML_HASH_SHA256, rml::platform::to_utf8(dir.path()).c_str(), out, sizeof(out)) == RML_ERR_IO);
+	CHECK(std::string_view(rml_last_error()).find("Not a file") != std::string_view::npos);
 }
 
-TEST_CASE("an unknown algorithm is rejected") {
-  char out[65] = {};
-  CHECK(rml_hash_bytes(7, nullptr, 0, out, sizeof(out)) == RML_ERR_INVALID_ARGUMENT);
+TEST_CASE("files with non-ascii paths hash correctly")
+{
+	const TempDirectory dir(std::filesystem::path(u8"rml native Ação ✓"));
+	const auto file = dir.write(std::filesystem::path(u8"mods ção.bin"), "abc");
+	char out[33] = {};
+	REQUIRE(rml_hash_file(RML_HASH_MD5, file.c_str(), out, sizeof(out)) == RML_OK);
+	CHECK(std::string_view(out) == "900150983cd24fb0d6963f7d28e17f72");
 }
 
-TEST_CASE("a missing file is an io error") {
-  char out[65] = {};
-  CHECK(rml_hash_file(RML_HASH_SHA256, "/definitely/missing/rml.bin", out, sizeof(out)) == RML_ERR_IO);
+TEST_CASE("async hashing reports through the callback")
+{
+	const TempDirectory dir("rml native async");
+	const auto [status, text] = hash_file_async(RML_HASH_SHA256, dir.write("abc.bin", "abc"));
+	CHECK(status == RML_OK);
+	CHECK(text == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 }
 
-TEST_CASE("a directory is not hashed") {
-  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "rml native dir";
-  std::filesystem::create_directories(dir);
-  char out[65] = {};
-  CHECK(rml_hash_file(RML_HASH_SHA256, utf8(dir).c_str(), out, sizeof(out)) == RML_ERR_IO);
-  CHECK(std::string(rml_last_error()).find("Not a file") != std::string::npos);
-  std::filesystem::remove_all(dir);
+TEST_CASE("async hashing of a missing file reports the error text")
+{
+	const auto [status, text] = hash_file_async(RML_HASH_MD5, "/definitely/missing/rml.bin");
+	CHECK(status == RML_ERR_IO);
+	CHECK(text.find("missing") != std::string::npos);
 }
 
-TEST_CASE("files with non-ascii paths hash correctly") {
-  const std::filesystem::path dir = std::filesystem::temp_directory_path() / std::filesystem::path(u8"rml native Ação ✓");
-  const std::filesystem::path file = write_file(dir / std::filesystem::path(u8"mods ção.bin"), "abc");
-  char out[33] = {};
-  REQUIRE(rml_hash_file(RML_HASH_MD5, utf8(file).c_str(), out, sizeof(out)) == RML_OK);
-  CHECK(std::string(out) == "900150983cd24fb0d6963f7d28e17f72");
-  std::filesystem::remove_all(dir);
-}
-
-TEST_CASE("async hashing reports through the callback") {
-  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "rml native async";
-  const std::filesystem::path file = write_file(dir / "abc.bin", "abc");
-  std::promise<std::pair<int32_t, std::string>> promise;
-  pending = &promise;
-  auto future = promise.get_future();
-  REQUIRE(rml_hash_file_async(RML_HASH_SHA256, utf8(file).c_str(), on_hashed) == RML_OK);
-  REQUIRE(future.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
-  const auto [status, text] = future.get();
-  CHECK(status == RML_OK);
-  CHECK(text == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
-  std::filesystem::remove_all(dir);
-}
-
-TEST_CASE("async hashing of a missing file reports the error text") {
-  std::promise<std::pair<int32_t, std::string>> promise;
-  pending = &promise;
-  auto future = promise.get_future();
-  REQUIRE(rml_hash_file_async(RML_HASH_MD5, "/definitely/missing/rml.bin", on_hashed) == RML_OK);
-  REQUIRE(future.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
-  const auto [status, text] = future.get();
-  CHECK(status == RML_ERR_IO);
-  CHECK(text.find("missing") != std::string::npos);
-}
-
-TEST_CASE("the os reduce motion setting is reported or unknown") {
-  const int32_t reduce = rml_os_reduce_motion();
-  CHECK((reduce == -1 || reduce == 0 || reduce == 1));
+TEST_CASE("the os reduce motion setting is reported or unknown")
+{
+	const auto reduce = rml_os_reduce_motion();
+	CHECK((reduce == -1 || reduce == 0 || reduce == 1));
 }
