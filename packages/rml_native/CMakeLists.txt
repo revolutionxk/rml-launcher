@@ -29,13 +29,13 @@ find_package(Threads REQUIRED)
 
 if (APPLE)
     enable_language(OBJCXX)
-    set(RML_OS_SOURCES src/os/reduce_motion_mac.mm src/exe/bundle_info_mac.cpp)
+    set(RML_OS_SOURCES src/os/reduce_motion_mac.mm src/exe/bundle_info_mac.cpp src/process/process_mac.mm)
     set(RML_OS_LIBRARIES "-framework AppKit" "-framework CoreFoundation")
 elseif (WIN32)
-    set(RML_OS_SOURCES src/os/reduce_motion_win.cpp src/exe/bundle_info_other.cpp)
+    set(RML_OS_SOURCES src/os/reduce_motion_win.cpp src/exe/bundle_info_other.cpp src/process/process_win.cpp)
     set(RML_OS_LIBRARIES user32)
 else ()
-    set(RML_OS_SOURCES src/os/reduce_motion_other.cpp src/exe/bundle_info_other.cpp)
+    set(RML_OS_SOURCES src/os/reduce_motion_other.cpp src/exe/bundle_info_other.cpp src/process/process_linux.cpp)
     set(RML_OS_LIBRARIES "")
 endif ()
 
@@ -50,12 +50,14 @@ target_sources(rml_objects PRIVATE
     src/api/json.cpp
     src/api/library.cpp
     src/api/os.cpp
+    src/api/process.cpp
     src/api/zip.cpp
     src/exe/pe_version.cpp
     src/fs/disk.cpp
     src/hash/algorithm.cpp
     src/platform/path.cpp
     src/platform/text.cpp
+    src/process/name.cpp
     src/zip/entry_path.cpp
     src/zip/extract.cpp
     ${RML_OS_SOURCES}
@@ -85,16 +87,26 @@ if (RML_NATIVE_TESTS)
     CPMAddPackage("gh:doctest/doctest@2.5.3")
     enable_testing()
 
+    add_executable(rml_sleeper tests/sleeper.cpp)
+    target_compile_features(rml_sleeper PRIVATE cxx_std_23)
+    if (WIN32)
+        target_link_libraries(rml_sleeper PRIVATE user32)
+    endif ()
+
     add_executable(rml_native_tests)
     target_sources(rml_native_tests PRIVATE
         tests/main.cpp
         tests/api_test.cpp
+        tests/child_process.cpp
         tests/disk_test.cpp
         tests/executable_test.cpp
         tests/hash_test.cpp
         tests/json_test.cpp
+        tests/process_test.cpp
         tests/zip_test.cpp
     )
     target_link_libraries(rml_native_tests PRIVATE rml_objects doctest::doctest)
+    target_compile_definitions(rml_native_tests PRIVATE RML_SLEEPER="$<TARGET_FILE:rml_sleeper>")
+    add_dependencies(rml_native_tests rml_sleeper)
     add_test(NAME rml_native_tests COMMAND rml_native_tests)
 endif ()

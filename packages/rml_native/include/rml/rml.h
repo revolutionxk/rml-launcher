@@ -51,6 +51,9 @@ extern "C"
 	RML_API int32_t rml_disk_free(const char* path, uint64_t* out_bytes);
 	RML_API int32_t rml_executable_info(const char* path, char** out_json);
 	RML_API int32_t rml_zip_extract_async(const char* archive, const char* destination, rml_progress_callback progress, rml_text_callback done);
+	RML_API int32_t rml_processes(const char* executable_name, char** out_json);
+	RML_API int32_t rml_process_close(int64_t pid);
+	RML_API int32_t rml_process_kill(int64_t pid);
 
 #ifdef __cplusplus
 }
