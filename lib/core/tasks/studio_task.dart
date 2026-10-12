@@ -5,6 +5,8 @@ import 'package:rml_launcher/core/storage/json_store.dart';
 enum TaskKind {
   install,
   update,
+  applyUpdate,
+  rollBack,
   checkFiles,
   duplicate,
   uninstall,

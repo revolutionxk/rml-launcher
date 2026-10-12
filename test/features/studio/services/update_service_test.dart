@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -192,6 +193,10 @@ void main() {
       await updates.applyReady('main');
       await updates.rollBack('main');
       final StudioBuild rolledFrom = main().previous!;
+      await harness.library.update(
+        (StudioLibrary library) =>
+            library.upsert(main().copyWith(policy: UpdatePolicy.followLive)),
+      );
       harness.installer.requests.clear();
       await updates.checkForUpdates();
       expect(harness.installer.requests, isEmpty);
@@ -216,5 +221,73 @@ void main() {
     expect(result.isOk, isTrue);
     expect(main().policy, UpdatePolicy.followLive);
     expect(main().ready!.version.text, '0.691.0.1');
+  });
+
+  test('applying is refused while an update task runs', () async {
+    harness.installer.gate = Completer<void>();
+    live('0.691.0.1');
+    final Future<Result<void>> checking = updates.checkForUpdates();
+    await Future<void>.delayed(Duration.zero);
+    await harness.library.update(
+      (StudioLibrary library) =>
+          library.upsert(main().copyWith(ready: current)),
+    );
+    expect(
+      (await updates.applyReady('main')).failureOrNull,
+      isA<TaskBusyFailure>(),
+    );
+    harness.installer.gate!.complete();
+    await checking;
+  });
+
+  test('rolling back waits for Studio to close', () async {
+    live('0.691.0.1');
+    await updates.checkForUpdates();
+    await updates.applyReady('main');
+    harness.runStudioFrom(harness.layout.studioExecutable(main().current!));
+    expect(
+      (await updates.rollBack('main')).failureOrNull,
+      isA<StudioRunningFailure>(),
+    );
+  });
+
+  test('applying is refused while the previous build runs', () async {
+    live('0.691.0.1');
+    await updates.checkForUpdates();
+    harness.runStudioFrom(harness.layout.studioExecutable(current));
+    expect(
+      (await updates.applyReady('main')).failureOrNull,
+      isA<StudioRunningFailure>(),
+    );
+  });
+
+  test('a Studio started while the gate waits stops the apply', () async {
+    final Completer<void> open = Completer<void>();
+    harness.hooks.updateGate =
+        (StudioInstall install, StudioVersion candidate) async {
+          await open.future;
+          return const UpdateReview();
+        };
+    live('0.691.0.1');
+    await updates.checkForUpdates();
+    final Future<Result<void>> applying = updates.applyReady('main');
+    await Future<void>.delayed(Duration.zero);
+    harness.runStudioFrom(harness.layout.studioExecutable(current));
+    open.complete();
+    expect((await applying).failureOrNull, isA<StudioRunningFailure>());
+    expect(main().current, current);
+    expect(File(settingsIn(current)).existsSync(), isTrue);
+  });
+
+  test('rolling back pins the install and checks leave it alone', () async {
+    live('0.691.0.1');
+    await updates.checkForUpdates();
+    await updates.applyReady('main');
+    await updates.rollBack('main');
+    expect(main().policy, UpdatePolicy.pinned);
+    harness.installer.requests.clear();
+    await updates.checkForUpdates();
+    expect(harness.installer.requests, isEmpty);
+    expect(main().ready, isNull);
   });
 }

@@ -6,6 +6,7 @@ import 'package:rml_launcher/core/tasks/task_center.dart';
 import 'package:rml_launcher/features/studio/data/cdn/studio_cdn.dart';
 import 'package:rml_launcher/features/studio/data/install/build_files.dart';
 import 'package:rml_launcher/features/studio/data/install/build_installer.dart';
+import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
 import 'package:rml_launcher/features/studio/data/install/carry_over.dart';
 import 'package:rml_launcher/features/studio/data/library_store.dart';
 import 'package:rml_launcher/features/studio/data/studio_layout.dart';
@@ -103,38 +104,60 @@ final class UpdateService {
     if (blocked != null) {
       return Result<void>.err(blocked);
     }
-    final UpdateReview verdict = await _hooks.updateGate(
-      install,
-      ready.version,
-    );
-    if (verdict.blocked) {
-      return Result<void>.err(UpdateBlockedFailure(blockers: verdict.blockers));
-    }
-    final Result<void> moved = await moveCarryOver(
-      _hooks.carryOver,
-      from: _layout.payloadDir(current),
-      to: _layout.payloadDir(ready),
-    );
-    if (moved.isErr) {
-      return moved;
-    }
-    final StudioBuild? dropped = install.previous;
-    await _change(
-      installId,
-      (StudioInstall install) =>
-          install.copyWith(previous: current, current: ready, ready: null),
-    );
-    if (dropped != null) {
-      await _dropUnused(dropped);
-    }
-    _events.emit(
-      UpdateApplied(
+    return _tasks.run<void>(
+      TaskRequest(
+        kind: TaskKind.applyUpdate,
         installId: installId,
-        from: current.version,
-        to: ready.version,
+        version: ready.version.text,
       ),
+      (TaskControl control) async {
+        final UpdateReview verdict = await _hooks.updateGate(
+          install,
+          ready.version,
+        );
+        if (verdict.blocked) {
+          return Result<void>.err(
+            UpdateBlockedFailure(blockers: verdict.blockers),
+          );
+        }
+        if (_running.isRunning(installId)) {
+          return Result<void>.err(StudioRunningFailure(installId: installId));
+        }
+        final Result<void> moved = await moveCarryOver(
+          _hooks.carryOver,
+          from: _layout.payloadDir(current),
+          to: _layout.payloadDir(ready),
+        );
+        if (moved.isErr) {
+          return moved;
+        }
+        final Result<void> saved = await _swap(
+          install,
+          (StudioInstall latest) =>
+              latest.copyWith(previous: current, current: ready, ready: null),
+        );
+        if (saved.isErr) {
+          await moveCarryOver(
+            _hooks.carryOver,
+            from: _layout.payloadDir(ready),
+            to: _layout.payloadDir(current),
+          );
+          return saved;
+        }
+        final StudioBuild? dropped = install.previous;
+        if (dropped != null) {
+          await _dropUnused(dropped);
+        }
+        _events.emit(
+          UpdateApplied(
+            installId: installId,
+            from: current.version,
+            to: ready.version,
+          ),
+        );
+        return const Result<void>.ok(null);
+      },
     );
-    return const Result<void>.ok(null);
   }
 
   Future<Result<void>> rollBack(String installId) async {
@@ -155,37 +178,63 @@ final class UpdateService {
     if (blocked != null) {
       return Result<void>.err(blocked);
     }
-    final Result<void> moved = await moveCarryOver(
-      _hooks.carryOver,
-      from: _layout.payloadDir(current),
-      to: _layout.payloadDir(previous),
-    );
-    if (moved.isErr) {
-      return moved;
-    }
-    await _change(
-      installId,
-      (StudioInstall install) =>
-          install.copyWith(current: previous, previous: current),
-    );
-    _events.emit(
-      RolledBack(
+    return _tasks.run<void>(
+      TaskRequest(
+        kind: TaskKind.rollBack,
         installId: installId,
-        from: current.version,
-        to: previous.version,
+        version: previous.version.text,
       ),
+      (TaskControl control) async {
+        if (_running.isRunning(installId)) {
+          return Result<void>.err(StudioRunningFailure(installId: installId));
+        }
+        final Result<void> moved = await moveCarryOver(
+          _hooks.carryOver,
+          from: _layout.payloadDir(current),
+          to: _layout.payloadDir(previous),
+        );
+        if (moved.isErr) {
+          return moved;
+        }
+        final Result<void> saved = await _swap(
+          install,
+          (StudioInstall latest) => latest.copyWith(
+            current: previous,
+            previous: current,
+            policy: UpdatePolicy.pinned,
+          ),
+        );
+        if (saved.isErr) {
+          await moveCarryOver(
+            _hooks.carryOver,
+            from: _layout.payloadDir(previous),
+            to: _layout.payloadDir(current),
+          );
+          return saved;
+        }
+        _events.emit(
+          RolledBack(
+            installId: installId,
+            from: current.version,
+            to: previous.version,
+          ),
+        );
+        return const Result<void>.ok(null);
+      },
     );
-    return const Result<void>.ok(null);
   }
 
   Future<Result<void>> setPolicy(String installId, UpdatePolicy policy) async {
     if (_library.value.byId(installId) == null) {
       return const Result<void>.err(NotFoundFailure(what: 'install'));
     }
-    await _change(
+    final Result<StudioLibrary> saved = await _change(
       installId,
       (StudioInstall install) => install.copyWith(policy: policy),
     );
+    if (saved.failureOrNull case final AppFailure failure) {
+      return Result<void>.err(failure);
+    }
     if (policy == UpdatePolicy.followLive) {
       await checkForUpdates();
     }
@@ -214,8 +263,7 @@ final class UpdateService {
   ) async {
     final StudioBuild? previous = install.previous;
     if (previous != null && previous.version == latest.version) {
-      await _promote(install.id, previous);
-      return const Result<void>.ok(null);
+      return _promote(install, previous);
     }
     final Result<InstalledBuild> fetched = await _fetcher.fetch(
       install.id,
@@ -227,17 +275,28 @@ final class UpdateService {
     return fetched.map((_) {});
   }
 
-  Future<void> _promote(String installId, StudioBuild previous) async {
-    StudioBuild? replaced;
-    await _change(installId, (StudioInstall install) {
-      replaced = install.ready;
-      return install.copyWith(ready: previous, previous: null);
-    });
-    final StudioBuild? old = replaced;
+  Future<Result<void>> _promote(
+    StudioInstall install,
+    StudioBuild previous,
+  ) async {
+    if (_tasks.isBusy(install.id) ||
+        !BuildMarker.existsIn(_layout.buildDirOf(previous))) {
+      return const Result<void>.ok(null);
+    }
+    final Result<void> saved = await _swap(
+      install,
+      (StudioInstall latest) =>
+          latest.copyWith(ready: previous, previous: null),
+    );
+    if (saved.isErr) {
+      return saved;
+    }
+    final StudioBuild? old = install.ready;
     if (old != null) {
       await _dropUnused(old);
     }
-    _events.emit(UpdateReady(installId: installId, version: previous.version));
+    _events.emit(UpdateReady(installId: install.id, version: previous.version));
+    return const Result<void>.ok(null);
   }
 
   Future<Result<void>> _setReady(
@@ -251,6 +310,9 @@ final class UpdateService {
       replaced = install.ready;
       return install.copyWith(ready: installed.build);
     });
+    if (saved.isErr) {
+      return saved.map((_) {});
+    }
     final StudioBuild? old = replaced;
     if (old != null) {
       await _dropUnused(old);
@@ -262,6 +324,34 @@ final class UpdateService {
     _events.emit(
       UpdateReady(installId: installId, version: installed.build.version),
     );
+    return saved.map((_) {});
+  }
+
+  Future<Result<void>> _swap(
+    StudioInstall expected,
+    StudioInstall Function(StudioInstall latest) change,
+  ) async {
+    bool stale = false;
+    final Result<StudioLibrary> saved = await _library.update((
+      StudioLibrary library,
+    ) {
+      final StudioInstall? latest = library.byId(expected.id);
+      if (latest == null ||
+          latest.current != expected.current ||
+          latest.ready != expected.ready ||
+          latest.previous != expected.previous) {
+        stale = true;
+        return library;
+      }
+      return library.upsert(change(latest));
+    });
+    if (stale) {
+      return Result<void>.err(
+        ValidationFailure(
+          message: '${expected.name} changed while updating; try again.',
+        ),
+      );
+    }
     return saved.map((_) {});
   }
 

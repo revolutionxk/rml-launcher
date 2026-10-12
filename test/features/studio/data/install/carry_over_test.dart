@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/features/studio/data/install/carry_over.dart';
 
@@ -46,5 +47,40 @@ void main() {
       isTrue,
     );
     expect(Directory(p.join(from, 'ClientSettings')).existsSync(), isFalse);
+  });
+
+  test('a failed second move puts the first back', () async {
+    final String from = p.join(dir.path, 'old');
+    final String to = p.join(dir.path, 'new');
+    File(p.join(from, 'A', 'a.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('a');
+    File(p.join(from, 'deep', 'B', 'b.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('b');
+    File(p.join(to, 'deep')).createSync(recursive: true);
+    final Result<void> result = await moveCarryOver(
+      <String>['A', 'deep/B'],
+      from: from,
+      to: to,
+    );
+    expect(result.isErr, isTrue);
+    expect(File(p.join(from, 'A', 'a.txt')).existsSync(), isTrue);
+    expect(File(p.join(from, 'deep', 'B', 'b.txt')).existsSync(), isTrue);
+    expect(Directory(p.join(to, 'A')).existsSync(), isFalse);
+  });
+
+  test('the same source and target is refused', () async {
+    final String same = p.join(dir.path, 'same');
+    File(p.join(same, 'A', 'a.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('a');
+    final Result<void> result = await moveCarryOver(
+      <String>['A'],
+      from: same,
+      to: same,
+    );
+    expect(result.failureOrNull, isA<ValidationFailure>());
+    expect(File(p.join(same, 'A', 'a.txt')).existsSync(), isTrue);
   });
 }
