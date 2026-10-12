@@ -2,14 +2,14 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rml_launcher/core/platform/os_reduce_motion.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/settings/settings_controller.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 import 'package:rml_launcher/routing/app_router.dart';
 
-class RmlApp extends ConsumerWidget {
-  const RmlApp({super.key});
+class LauncherApp extends ConsumerWidget {
+  const LauncherApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,7 +24,7 @@ class RmlApp extends ConsumerWidget {
       locale: TranslationProvider.of(context).flutterLocale,
       supportedLocales: AppLocaleUtils.supportedLocales,
       builder: (BuildContext context, Widget? child) {
-        final RmlThemeData theme = RmlThemeData.resolve(
+        final ThemeData theme = ThemeData.resolve(
           palette: settings.palette,
           mode: settings.mode,
           reduceMotion: settings.reduceMotion,
@@ -32,7 +32,7 @@ class RmlApp extends ConsumerWidget {
           platformDisablesAnimations:
               MediaQuery.disableAnimationsOf(context) || osReducesMotion,
         );
-        return RmlTheme(
+        return Theme(
           data: theme,
           child: DefaultTextStyle(
             style: theme.typography.body.copyWith(color: theme.colors.text),

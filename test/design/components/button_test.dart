@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rml_launcher/design/components/rml_button.dart';
+import 'package:rml_launcher/design/components/button.dart';
 
 import '../../support/component_harness.dart';
 
@@ -9,7 +9,7 @@ void main() {
   testWidgets('tapping calls onPressed', (WidgetTester tester) async {
     int presses = 0;
     await tester.pumpWidget(
-      componentHarness(RmlButton(label: 'Launch', onPressed: () => presses++)),
+      componentHarness(Button(label: 'Launch', onPressed: () => presses++)),
     );
     await tester.tap(find.text('Launch'));
     expect(presses, 1);
@@ -19,7 +19,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      componentHarness(const RmlButton(label: 'Launch', onPressed: null)),
+      componentHarness(const Button(label: 'Launch', onPressed: null)),
     );
     expect(
       tester.getSemantics(find.text('Launch')),
@@ -33,7 +33,7 @@ void main() {
     int presses = 0;
     await tester.pumpWidget(
       componentHarness(
-        RmlButton(label: 'Launch', autofocus: true, onPressed: () => presses++),
+        Button(label: 'Launch', autofocus: true, onPressed: () => presses++),
       ),
     );
     await tester.pump();
@@ -47,16 +47,8 @@ void main() {
       componentHarness(
         const Column(
           children: <Widget>[
-            RmlButton(
-              label: 'A',
-              onPressed: null,
-              variant: RmlButtonVariant.primary,
-            ),
-            RmlButton(
-              label: 'B',
-              onPressed: null,
-              variant: RmlButtonVariant.quiet,
-            ),
+            Button(label: 'A', onPressed: null, variant: ButtonVariant.primary),
+            Button(label: 'B', onPressed: null, variant: ButtonVariant.quiet),
           ],
         ),
       ),

@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/design/tokens/contrast.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
 
 void main() {
   test('black on white is 21:1', () {
@@ -11,9 +11,9 @@ void main() {
     );
   });
 
-  for (final RmlPalette palette in RmlPalette.values) {
+  for (final Palette palette in Palette.values) {
     for (final Brightness brightness in Brightness.values) {
-      final RmlColors colors = RmlColors.of(palette, brightness);
+      final ThemeColors colors = ThemeColors.of(palette, brightness);
       group('${palette.name} ${brightness.name}', () {
         final Map<String, Color> foregrounds = <String, Color>{
           'text': colors.text,

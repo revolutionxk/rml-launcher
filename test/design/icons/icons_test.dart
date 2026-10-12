@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rml_launcher/design/icons/rml_icons.dart';
+import 'package:rml_launcher/design/icons/icons.dart';
 
 import '../../support/component_harness.dart';
 
@@ -17,14 +17,14 @@ void main() {
   });
 
   test('icons point at the bundled families', () {
-    expect(RmlIcons.house.fontFamily, 'PhosphorRegular');
-    expect(RmlIcons.houseFill.fontFamily, 'PhosphorFill');
-    expect(RmlIcons.house.codePoint, RmlIcons.houseFill.codePoint);
-    expect(RmlIcons.x.codePoint, 0xe4f6);
+    expect(Icons.house.fontFamily, 'PhosphorRegular');
+    expect(Icons.houseFill.fontFamily, 'PhosphorFill');
+    expect(Icons.house.codePoint, Icons.houseFill.codePoint);
+    expect(Icons.x.codePoint, 0xe4f6);
   });
 
   testWidgets('an icon renders', (WidgetTester tester) async {
-    await tester.pumpWidget(componentHarness(const Icon(RmlIcons.gearSix)));
+    await tester.pumpWidget(componentHarness(const Icon(Icons.gearSix)));
     expect(find.byType(Icon), findsOneWidget);
   });
 }

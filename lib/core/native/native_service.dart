@@ -12,8 +12,8 @@ abstract interface class NativeService {
   Future<Result<String>> hashFile(rml.HashAlgorithm algorithm, String path);
 }
 
-final class RmlNativeService implements NativeService {
-  const RmlNativeService();
+final class FfiNativeService implements NativeService {
+  const FfiNativeService();
 
   @override
   String? get version {
@@ -40,7 +40,7 @@ final class RmlNativeService implements NativeService {
   ) async {
     try {
       return Result<String>.ok(await rml.hashFile(algorithm, path));
-    } on rml.RmlNativeException catch (error, stackTrace) {
+    } on rml.NativeException catch (error, stackTrace) {
       return Result<String>.err(
         NativeFailure(
           code: error.code,

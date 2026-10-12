@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/core/di/providers.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/settings/data/settings_repository.dart';
 import 'package:rml_launcher/features/settings/settings_controller.dart';
@@ -29,12 +29,12 @@ void main() {
       settingsControllerProvider.notifier,
     );
 
-    await controller.setPalette(RmlPalette.stoneAndSand);
+    await controller.setPalette(Palette.stoneAndSand);
     await controller.setMode(ModeSetting.dark);
     await controller.setReduceMotion(ReduceMotionSetting.on);
 
     final AppSettings state = container.read(settingsControllerProvider);
-    expect(state.palette, RmlPalette.stoneAndSand);
+    expect(state.palette, Palette.stoneAndSand);
     expect(state.mode, ModeSetting.dark);
     expect(state.reduceMotion, ReduceMotionSetting.on);
     expect(await SettingsRepository(store).load(), state);

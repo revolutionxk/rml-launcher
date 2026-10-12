@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/app.dart';
 import 'package:rml_launcher/core/di/providers.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/shell/view/app_shell.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 
@@ -27,7 +27,7 @@ void main() {
             testDependencies(native: native),
           ),
         ],
-        child: TranslationProvider(child: const RmlApp()),
+        child: TranslationProvider(child: const LauncherApp()),
       ),
     );
     await tester.pumpAndSettle();
@@ -42,8 +42,8 @@ void main() {
     await tester.tap(find.text('Stone and sand'));
     await tester.pumpAndSettle();
     expect(
-      RmlTheme.of(tester.element(find.byType(AppShell))).palette,
-      RmlPalette.stoneAndSand,
+      Theme.of(tester.element(find.byType(AppShell))).palette,
+      Palette.stoneAndSand,
     );
   });
 

@@ -1,11 +1,11 @@
 import 'package:flutter/widgets.dart';
-import 'package:rml_launcher/design/motion/rml_motion.dart';
-import 'package:rml_launcher/design/theme/rml_typography.dart';
+import 'package:rml_launcher/design/motion/motion.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/theme/typography.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
-final class RmlThemeData {
-  const RmlThemeData({
+final class ThemeData {
+  const ThemeData({
     required this.palette,
     required this.brightness,
     required this.colors,
@@ -13,8 +13,8 @@ final class RmlThemeData {
     required this.motion,
   });
 
-  factory RmlThemeData.resolve({
-    required RmlPalette palette,
+  factory ThemeData.resolve({
+    required Palette palette,
     required ModeSetting mode,
     required ReduceMotionSetting reduceMotion,
     required Brightness platformBrightness,
@@ -30,24 +30,24 @@ final class RmlThemeData {
       ReduceMotionSetting.on => true,
       ReduceMotionSetting.off => false,
     };
-    return RmlThemeData(
+    return ThemeData(
       palette: palette,
       brightness: brightness,
-      colors: RmlColors.of(palette, brightness),
-      typography: RmlTypography.standard,
-      motion: RmlMotion(reduced: reduced),
+      colors: ThemeColors.of(palette, brightness),
+      typography: Typography.standard,
+      motion: Motion(reduced: reduced),
     );
   }
 
-  final RmlPalette palette;
+  final Palette palette;
   final Brightness brightness;
-  final RmlColors colors;
-  final RmlTypography typography;
-  final RmlMotion motion;
+  final ThemeColors colors;
+  final Typography typography;
+  final Motion motion;
 
   @override
   bool operator ==(Object other) =>
-      other is RmlThemeData &&
+      other is ThemeData &&
       other.palette == palette &&
       other.brightness == brightness &&
       other.motion.reduced == motion.reduced;
@@ -56,18 +56,17 @@ final class RmlThemeData {
   int get hashCode => Object.hash(palette, brightness, motion.reduced);
 }
 
-class RmlTheme extends InheritedWidget {
-  const RmlTheme({required this.data, required super.child, super.key});
+class Theme extends InheritedWidget {
+  const Theme({required this.data, required super.child, super.key});
 
-  final RmlThemeData data;
+  final ThemeData data;
 
-  static RmlThemeData of(BuildContext context) {
-    final RmlTheme? theme = context
-        .dependOnInheritedWidgetOfExactType<RmlTheme>();
-    assert(theme != null, 'No RmlTheme above this context');
+  static ThemeData of(BuildContext context) {
+    final Theme? theme = context.dependOnInheritedWidgetOfExactType<Theme>();
+    assert(theme != null, 'No Theme above this context');
     return theme!.data;
   }
 
   @override
-  bool updateShouldNotify(RmlTheme oldWidget) => data != oldWidget.data;
+  bool updateShouldNotify(Theme oldWidget) => data != oldWidget.data;
 }

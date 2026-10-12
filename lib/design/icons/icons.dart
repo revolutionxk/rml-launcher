@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-abstract final class RmlIcons {
+abstract final class Icons {
   static const String _regular = 'PhosphorRegular';
   static const String _fill = 'PhosphorFill';
 

@@ -17,7 +17,7 @@ Future<void> main() async {
     ProviderScope(
       retry: (int retryCount, Object error) => null,
       overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-      child: TranslationProvider(child: const RmlApp()),
+      child: TranslationProvider(child: const LauncherApp()),
     ),
   );
 }

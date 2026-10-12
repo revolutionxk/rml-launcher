@@ -31,7 +31,7 @@ String hashBytes(HashAlgorithm algorithm, Uint8List data) =>
         capacity,
       );
       if (status != 0) {
-        throw RmlNativeException.last(status);
+        throw NativeException.last(status);
       }
       return out.cast<Utf8>().toDartString();
     });
@@ -68,7 +68,7 @@ Future<String> hashFile(HashAlgorithm algorithm, String path) {
   }
   if (status != 0) {
     callable.close();
-    completer.completeError(RmlNativeException.last(status));
+    completer.completeError(NativeException.last(status));
   }
   return completer.future;
 }
@@ -76,10 +76,10 @@ Future<String> hashFile(HashAlgorithm algorithm, String path) {
 String _hashResult(int status, Pointer<Char> text) {
   final String? message = text == nullptr ? null : readNativeText(text);
   if (status != 0) {
-    throw RmlNativeException(status, message ?? '');
+    throw NativeException(status, message ?? '');
   }
   if (message == null) {
-    throw const RmlNativeException(3, 'No result');
+    throw const NativeException(3, 'No result');
   }
   return message;
 }

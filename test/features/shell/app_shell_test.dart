@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/app.dart';
 import 'package:rml_launcher/core/di/providers.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/shell/view/app_shell.dart';
@@ -36,7 +36,7 @@ void main() {
             ),
           ),
         ],
-        child: TranslationProvider(child: const RmlApp()),
+        child: TranslationProvider(child: const LauncherApp()),
       ),
     );
     await tester.pumpAndSettle();
@@ -101,13 +101,13 @@ void main() {
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     await pumpApp(tester);
     expect(
-      RmlTheme.of(tester.element(find.byType(AppShell))).brightness,
+      Theme.of(tester.element(find.byType(AppShell))).brightness,
       Brightness.light,
     );
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await tester.pumpAndSettle();
     expect(
-      RmlTheme.of(tester.element(find.byType(AppShell))).brightness,
+      Theme.of(tester.element(find.byType(AppShell))).brightness,
       Brightness.dark,
     );
   });
@@ -117,7 +117,7 @@ void main() {
   ) async {
     await pumpApp(tester, native: FakeNativeService(osReducesMotion: true));
     expect(
-      RmlTheme.of(tester.element(find.byType(AppShell))).motion.reduced,
+      Theme.of(tester.element(find.byType(AppShell))).motion.reduced,
       isTrue,
     );
   });
@@ -133,7 +133,7 @@ void main() {
       native: FakeNativeService(osReducesMotion: true),
     );
     expect(
-      RmlTheme.of(tester.element(find.byType(AppShell))).motion.reduced,
+      Theme.of(tester.element(find.byType(AppShell))).motion.reduced,
       isFalse,
     );
   });

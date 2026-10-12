@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:rml_launcher/core/di/providers.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 
@@ -12,7 +12,7 @@ class SettingsController extends _$SettingsController {
   @override
   AppSettings build() => ref.watch(appDependenciesProvider).initialSettings;
 
-  Future<void> setPalette(RmlPalette palette) =>
+  Future<void> setPalette(Palette palette) =>
       _update(state.copyWith(palette: palette));
 
   Future<void> setMode(ModeSetting mode) => _update(state.copyWith(mode: mode));

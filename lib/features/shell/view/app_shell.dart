@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/shell/view/sidebar.dart';
 import 'package:rml_launcher/features/shell/view/title_bar.dart';
 import 'package:rml_launcher/routing/routes.dart';
@@ -16,7 +16,7 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlColors colors = RmlTheme.of(context).colors;
+    final ThemeColors colors = Theme.of(context).colors;
     final SingleActivator search = defaultTargetPlatform == TargetPlatform.macOS
         ? const SingleActivator(LogicalKeyboardKey.keyK, meta: true)
         : const SingleActivator(LogicalKeyboardKey.keyK, control: true);

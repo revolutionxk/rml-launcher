@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 
 class PageScaffold extends StatelessWidget {
   const PageScaffold({
@@ -13,7 +13,7 @@ class PageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
+    final ThemeData theme = Theme.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Column(

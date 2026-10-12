@@ -6,7 +6,7 @@ import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
 
 void main() {
-  const RmlNativeService service = RmlNativeService();
+  const FfiNativeService service = FfiNativeService();
 
   test('loads the native library in the app', () {
     expect(service.version, '0.1.0');

@@ -51,8 +51,8 @@ void main() {
     await expectLater(
       hashFile(HashAlgorithm.md5, '/definitely/missing/rml.bin'),
       throwsA(
-        isA<RmlNativeException>().having(
-          (RmlNativeException error) => error.code,
+        isA<NativeException>().having(
+          (NativeException error) => error.code,
           'code',
           2,
         ),
@@ -66,8 +66,8 @@ void main() {
     await expectLater(
       hashFile(HashAlgorithm.md5, dir.path),
       throwsA(
-        isA<RmlNativeException>().having(
-          (RmlNativeException error) => error.code,
+        isA<NativeException>().having(
+          (NativeException error) => error.code,
           'code',
           2,
         ),

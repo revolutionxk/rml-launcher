@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:rml_launcher/design/components/focus_ring.dart';
 import 'package:rml_launcher/design/components/pressable.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
 class NavItem extends StatelessWidget {
   const NavItem({
@@ -24,8 +24,8 @@ class NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
-    final RmlColors colors = theme.colors;
+    final ThemeData theme = Theme.of(context);
+    final ThemeColors colors = theme.colors;
     final String? hint = trailing;
     return Pressable(
       onPressed: onPressed,

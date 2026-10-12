@@ -1,9 +1,9 @@
 import 'package:flutter/painting.dart';
 import 'package:rml_launcher/design/components/pressable.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
 BoxDecoration? focusRing(
-  RmlColors colors,
+  ThemeColors colors,
   PressableState state,
   double radius,
 ) => state.focused

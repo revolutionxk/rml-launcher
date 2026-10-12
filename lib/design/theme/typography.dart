@@ -1,7 +1,7 @@
 import 'package:flutter/painting.dart';
 
-final class RmlTypography {
-  const RmlTypography({
+final class Typography {
+  const Typography({
     required this.title,
     required this.heading,
     required this.body,
@@ -14,7 +14,7 @@ final class RmlTypography {
   static const String sans = 'SourceSans3';
   static const String mono = 'SourceCodePro';
 
-  static const RmlTypography standard = RmlTypography(
+  static const Typography standard = Typography(
     title: TextStyle(
       fontFamily: sans,
       fontSize: 20,

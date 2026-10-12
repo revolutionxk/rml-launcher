@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart';
 
-enum RmlPalette { blackAndBlue, stoneAndSand, studioGrey }
+enum Palette { blackAndBlue, stoneAndSand, studioGrey }
 
-final class RmlColors {
-  const RmlColors({
+final class ThemeColors {
+  const ThemeColors({
     required this.chrome,
     required this.panel,
     required this.well,
@@ -51,17 +51,17 @@ final class RmlColors {
   final Color danger;
   final Color scrim;
 
-  static RmlColors of(RmlPalette palette, Brightness brightness) =>
+  static ThemeColors of(Palette palette, Brightness brightness) =>
       switch ((palette, brightness)) {
-        (RmlPalette.blackAndBlue, Brightness.dark) => blackAndBlueDark,
-        (RmlPalette.blackAndBlue, Brightness.light) => blackAndBlueLight,
-        (RmlPalette.stoneAndSand, Brightness.dark) => stoneAndSandDark,
-        (RmlPalette.stoneAndSand, Brightness.light) => stoneAndSandLight,
-        (RmlPalette.studioGrey, Brightness.dark) => studioGreyDark,
-        (RmlPalette.studioGrey, Brightness.light) => studioGreyLight,
+        (Palette.blackAndBlue, Brightness.dark) => blackAndBlueDark,
+        (Palette.blackAndBlue, Brightness.light) => blackAndBlueLight,
+        (Palette.stoneAndSand, Brightness.dark) => stoneAndSandDark,
+        (Palette.stoneAndSand, Brightness.light) => stoneAndSandLight,
+        (Palette.studioGrey, Brightness.dark) => studioGreyDark,
+        (Palette.studioGrey, Brightness.light) => studioGreyLight,
       };
 
-  static const RmlColors blackAndBlueDark = RmlColors(
+  static const ThemeColors blackAndBlueDark = ThemeColors(
     chrome: Color(0xFF141E26),
     panel: Color(0xFF1B2A35),
     well: Color(0xFF172530),
@@ -86,7 +86,7 @@ final class RmlColors {
     scrim: Color(0x8C060B0F),
   );
 
-  static const RmlColors blackAndBlueLight = RmlColors(
+  static const ThemeColors blackAndBlueLight = ThemeColors(
     chrome: Color(0xFFE0E8EE),
     panel: Color(0xFFF2F6F9),
     well: Color(0xFFE8EEF2),
@@ -111,7 +111,7 @@ final class RmlColors {
     scrim: Color(0x471B2A35),
   );
 
-  static const RmlColors stoneAndSandDark = RmlColors(
+  static const ThemeColors stoneAndSandDark = ThemeColors(
     chrome: Color(0xFF1F1D1E),
     panel: Color(0xFF272426),
     well: Color(0xFF221F21),
@@ -136,7 +136,7 @@ final class RmlColors {
     scrim: Color(0x8C0C0A0B),
   );
 
-  static const RmlColors stoneAndSandLight = RmlColors(
+  static const ThemeColors stoneAndSandLight = ThemeColors(
     chrome: Color(0xFFE4E2DF),
     panel: Color(0xFFF3F2F0),
     well: Color(0xFFEAE8E5),
@@ -161,7 +161,7 @@ final class RmlColors {
     scrim: Color(0x42281E23),
   );
 
-  static const RmlColors studioGreyDark = RmlColors(
+  static const ThemeColors studioGreyDark = ThemeColors(
     chrome: Color(0xFF232323),
     panel: Color(0xFF2B2B2B),
     well: Color(0xFF262626),
@@ -186,7 +186,7 @@ final class RmlColors {
     scrim: Color(0x80000000),
   );
 
-  static const RmlColors studioGreyLight = RmlColors(
+  static const ThemeColors studioGreyLight = ThemeColors(
     chrome: Color(0xFFE6E6E6),
     panel: Color(0xFFF6F6F6),
     well: Color(0xFFECECEC),

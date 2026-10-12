@@ -1,6 +1,6 @@
 import 'package:rml_launcher/core/storage/json_store.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
 enum AppLanguage {
   english('en'),
@@ -29,7 +29,7 @@ final class AppSettings {
   });
 
   factory AppSettings.fromJson(JsonMap json) => AppSettings(
-    palette: _byName(RmlPalette.values, json['palette'], defaults.palette),
+    palette: _byName(Palette.values, json['palette'], defaults.palette),
     mode: _byName(ModeSetting.values, json['mode'], defaults.mode),
     reduceMotion: _byName(
       ReduceMotionSetting.values,
@@ -42,18 +42,18 @@ final class AppSettings {
   );
 
   static const AppSettings defaults = AppSettings(
-    palette: RmlPalette.blackAndBlue,
+    palette: Palette.blackAndBlue,
     mode: ModeSetting.system,
     reduceMotion: ReduceMotionSetting.system,
   );
 
-  final RmlPalette palette;
+  final Palette palette;
   final ModeSetting mode;
   final ReduceMotionSetting reduceMotion;
   final AppLanguage? language;
 
   AppSettings copyWith({
-    RmlPalette? palette,
+    Palette? palette,
     ModeSetting? mode,
     ReduceMotionSetting? reduceMotion,
     AppLanguage? language,

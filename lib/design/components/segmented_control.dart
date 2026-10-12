@@ -1,19 +1,19 @@
 import 'package:flutter/widgets.dart';
 import 'package:rml_launcher/design/components/focus_ring.dart';
 import 'package:rml_launcher/design/components/pressable.dart';
-import 'package:rml_launcher/design/motion/rml_motion.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/motion/motion.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
-final class RmlSegment<T> {
-  const RmlSegment({required this.value, required this.label});
+final class Segment<T> {
+  const Segment({required this.value, required this.label});
 
   final T value;
   final String label;
 }
 
-class RmlSegmented<T> extends StatelessWidget {
-  const RmlSegmented({
+class SegmentedControl<T> extends StatelessWidget {
+  const SegmentedControl({
     required this.segments,
     required this.selected,
     required this.onChanged,
@@ -21,15 +21,15 @@ class RmlSegmented<T> extends StatelessWidget {
     super.key,
   });
 
-  final List<RmlSegment<T>> segments;
+  final List<Segment<T>> segments;
   final T selected;
   final ValueChanged<T>? onChanged;
   final String semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
-    final RmlColors colors = theme.colors;
+    final ThemeData theme = Theme.of(context);
+    final ThemeColors colors = theme.colors;
     final ValueChanged<T>? handler = onChanged;
     return Semantics(
       container: true,
@@ -44,7 +44,7 @@ class RmlSegmented<T> extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            for (final RmlSegment<T> segment in segments)
+            for (final Segment<T> segment in segments)
               Pressable(
                 selected: segment.value == selected,
                 onPressed: handler == null
@@ -54,7 +54,7 @@ class RmlSegmented<T> extends StatelessWidget {
                   final bool isSelected = segment.value == selected;
                   return AnimatedContainer(
                     duration: theme.motion.sm,
-                    curve: RmlCurves.out,
+                    curve: Easing.out,
                     height: 28,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     alignment: Alignment.center,

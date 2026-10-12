@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:rml_launcher/design/identity/identity_color.dart';
 import 'package:rml_launcher/design/identity/monogram.dart';
 import 'package:rml_launcher/design/identity/tile_progress.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 
 class InstallTile extends StatelessWidget {
   const InstallTile({
@@ -33,7 +33,7 @@ class InstallTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
+    final ThemeData theme = Theme.of(context);
     final Brightness brightness = theme.brightness;
     final Color ink = IdentityColor.ink(brightness);
     final double radius = size * 0.22;

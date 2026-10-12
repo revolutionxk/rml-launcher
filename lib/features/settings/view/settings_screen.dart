@@ -2,11 +2,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rml_launcher/core/config/app_info.dart';
 import 'package:rml_launcher/core/di/providers.dart';
-import 'package:rml_launcher/design/components/rml_segmented.dart';
+import 'package:rml_launcher/design/components/segmented_control.dart';
 import 'package:rml_launcher/design/layout/page_scaffold.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/settings/settings_controller.dart';
 import 'package:rml_launcher/features/settings/view/settings_section.dart';
@@ -18,7 +18,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final Translations t = context.t;
-    final RmlThemeData theme = RmlTheme.of(context);
+    final ThemeData theme = Theme.of(context);
     final AppSettings settings = ref.watch(settingsControllerProvider);
     final SettingsController controller = ref.read(
       settingsControllerProvider.notifier,
@@ -38,21 +38,21 @@ class SettingsScreen extends ConsumerWidget {
           children: <Widget>[
             SettingsRow(
               label: t.settings.colorTheme,
-              control: RmlSegmented<RmlPalette>(
+              control: SegmentedControl<Palette>(
                 semanticLabel: t.settings.colorTheme,
                 selected: settings.palette,
                 onChanged: controller.setPalette,
-                segments: <RmlSegment<RmlPalette>>[
-                  RmlSegment<RmlPalette>(
-                    value: RmlPalette.blackAndBlue,
+                segments: <Segment<Palette>>[
+                  Segment<Palette>(
+                    value: Palette.blackAndBlue,
                     label: t.settings.palette.blackAndBlue,
                   ),
-                  RmlSegment<RmlPalette>(
-                    value: RmlPalette.stoneAndSand,
+                  Segment<Palette>(
+                    value: Palette.stoneAndSand,
                     label: t.settings.palette.stoneAndSand,
                   ),
-                  RmlSegment<RmlPalette>(
-                    value: RmlPalette.studioGrey,
+                  Segment<Palette>(
+                    value: Palette.studioGrey,
                     label: t.settings.palette.studioGrey,
                   ),
                 ],
@@ -60,20 +60,20 @@ class SettingsScreen extends ConsumerWidget {
             ),
             SettingsRow(
               label: t.settings.mode,
-              control: RmlSegmented<ModeSetting>(
+              control: SegmentedControl<ModeSetting>(
                 semanticLabel: t.settings.mode,
                 selected: settings.mode,
                 onChanged: controller.setMode,
-                segments: <RmlSegment<ModeSetting>>[
-                  RmlSegment<ModeSetting>(
+                segments: <Segment<ModeSetting>>[
+                  Segment<ModeSetting>(
                     value: ModeSetting.system,
                     label: t.settings.modes.system,
                   ),
-                  RmlSegment<ModeSetting>(
+                  Segment<ModeSetting>(
                     value: ModeSetting.dark,
                     label: t.settings.modes.dark,
                   ),
-                  RmlSegment<ModeSetting>(
+                  Segment<ModeSetting>(
                     value: ModeSetting.light,
                     label: t.settings.modes.light,
                   ),
@@ -82,20 +82,20 @@ class SettingsScreen extends ConsumerWidget {
             ),
             SettingsRow(
               label: t.settings.reduceMotion,
-              control: RmlSegmented<ReduceMotionSetting>(
+              control: SegmentedControl<ReduceMotionSetting>(
                 semanticLabel: t.settings.reduceMotion,
                 selected: settings.reduceMotion,
                 onChanged: controller.setReduceMotion,
-                segments: <RmlSegment<ReduceMotionSetting>>[
-                  RmlSegment<ReduceMotionSetting>(
+                segments: <Segment<ReduceMotionSetting>>[
+                  Segment<ReduceMotionSetting>(
                     value: ReduceMotionSetting.system,
                     label: t.settings.motion.system,
                   ),
-                  RmlSegment<ReduceMotionSetting>(
+                  Segment<ReduceMotionSetting>(
                     value: ReduceMotionSetting.on,
                     label: t.settings.motion.turnedOn,
                   ),
-                  RmlSegment<ReduceMotionSetting>(
+                  Segment<ReduceMotionSetting>(
                     value: ReduceMotionSetting.off,
                     label: t.settings.motion.turnedOff,
                   ),
@@ -109,16 +109,16 @@ class SettingsScreen extends ConsumerWidget {
           children: <Widget>[
             SettingsRow(
               label: t.settings.language,
-              control: RmlSegmented<AppLanguage>(
+              control: SegmentedControl<AppLanguage>(
                 semanticLabel: t.settings.language,
                 selected: language,
                 onChanged: controller.setLanguage,
-                segments: <RmlSegment<AppLanguage>>[
-                  RmlSegment<AppLanguage>(
+                segments: <Segment<AppLanguage>>[
+                  Segment<AppLanguage>(
                     value: AppLanguage.english,
                     label: t.settings.languages.english,
                   ),
-                  RmlSegment<AppLanguage>(
+                  Segment<AppLanguage>(
                     value: AppLanguage.portuguese,
                     label: t.settings.languages.portuguese,
                   ),

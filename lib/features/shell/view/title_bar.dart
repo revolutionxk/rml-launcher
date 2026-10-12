@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rml_launcher/core/di/providers.dart';
 import 'package:rml_launcher/core/platform/window_chrome.dart';
 import 'package:rml_launcher/design/components/pressable.dart';
-import 'package:rml_launcher/design/icons/rml_icons.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/icons/icons.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/shell/view/drag_area.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 
@@ -37,17 +37,17 @@ class _WindowButtons extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         _WindowButton(
-          icon: RmlIcons.minus,
+          icon: Icons.minus,
           label: t.window.minimize,
           onPressed: chrome.minimize,
         ),
         _WindowButton(
-          icon: RmlIcons.square,
+          icon: Icons.square,
           label: t.window.maximize,
           onPressed: chrome.toggleMaximize,
         ),
         _WindowButton(
-          icon: RmlIcons.x,
+          icon: Icons.x,
           label: t.window.close,
           onPressed: chrome.close,
           destructive: true,
@@ -72,7 +72,7 @@ class _WindowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlColors colors = RmlTheme.of(context).colors;
+    final ThemeColors colors = Theme.of(context).colors;
     return Pressable(
       onPressed: onPressed,
       semanticLabel: label,

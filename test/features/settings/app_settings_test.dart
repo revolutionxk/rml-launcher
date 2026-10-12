@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 
 void main() {
   test('round trips through json', () {
     const AppSettings settings = AppSettings(
-      palette: RmlPalette.studioGrey,
+      palette: Palette.studioGrey,
       mode: ModeSetting.light,
       reduceMotion: ReduceMotionSetting.on,
       language: AppLanguage.portuguese,

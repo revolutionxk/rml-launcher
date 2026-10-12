@@ -22,6 +22,6 @@ Future<AppDependencies> bootstrap() async {
     settingsRepository: settingsRepository,
     initialSettings: initialSettings,
     windowChrome: const WindowManagerChrome(),
-    native: const RmlNativeService(),
+    native: const FfiNativeService(),
   );
 }

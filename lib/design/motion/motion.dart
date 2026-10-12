@@ -1,13 +1,13 @@
 import 'package:flutter/widgets.dart';
 
-abstract final class RmlCurves {
+abstract final class Easing {
   static const Curve out = Cubic(0.23, 1, 0.32, 1);
   static const Curve emphasized = Cubic(0.32, 0.72, 0, 1);
   static const Curve inOut = Cubic(0.77, 0, 0.175, 1);
 }
 
-final class RmlMotion {
-  const RmlMotion({required this.reduced});
+final class Motion {
+  const Motion({required this.reduced});
 
   final bool reduced;
 

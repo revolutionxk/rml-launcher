@@ -1,17 +1,17 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rml_launcher/design/motion/rml_motion.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/motion/motion.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 import 'package:rml_launcher/design/theme/theme_settings.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
-RmlThemeData resolve({
+ThemeData resolve({
   ModeSetting mode = ModeSetting.system,
   ReduceMotionSetting reduceMotion = ReduceMotionSetting.system,
   Brightness platformBrightness = Brightness.dark,
   bool platformDisablesAnimations = false,
-}) => RmlThemeData.resolve(
-  palette: RmlPalette.blackAndBlue,
+}) => ThemeData.resolve(
+  palette: Palette.blackAndBlue,
   mode: mode,
   reduceMotion: reduceMotion,
   platformBrightness: platformBrightness,
@@ -30,14 +30,14 @@ void main() {
   test('an explicit mode wins over the platform', () {
     expect(
       resolve(mode: ModeSetting.light).colors,
-      same(RmlColors.blackAndBlueLight),
+      same(ThemeColors.blackAndBlueLight),
     );
     expect(
       resolve(
         mode: ModeSetting.dark,
         platformBrightness: Brightness.light,
       ).colors,
-      same(RmlColors.blackAndBlueDark),
+      same(ThemeColors.blackAndBlueDark),
     );
   });
 
@@ -58,11 +58,11 @@ void main() {
   });
 
   test('reduced motion zeroes movement but keeps fades', () {
-    const RmlMotion reduced = RmlMotion(reduced: true);
+    const Motion reduced = Motion(reduced: true);
     expect(reduced.press, Duration.zero);
     expect(reduced.lg, Duration.zero);
     expect(reduced.fade, const Duration(milliseconds: 150));
-    const RmlMotion full = RmlMotion(reduced: false);
+    const Motion full = Motion(reduced: false);
     expect(full.press, const Duration(milliseconds: 100));
     expect(full.hoverIn, const Duration(milliseconds: 60));
     expect(full.hoverOut, const Duration(milliseconds: 140));
@@ -74,17 +74,15 @@ void main() {
     expect(resolve() == resolve(mode: ModeSetting.light), isFalse);
   });
 
-  testWidgets('RmlTheme.of finds the nearest theme', (
-    WidgetTester tester,
-  ) async {
-    final RmlThemeData data = resolve(mode: ModeSetting.light);
-    late RmlThemeData found;
+  testWidgets('Theme.of finds the nearest theme', (WidgetTester tester) async {
+    final ThemeData data = resolve(mode: ModeSetting.light);
+    late ThemeData found;
     await tester.pumpWidget(
-      RmlTheme(
+      Theme(
         data: data,
         child: Builder(
           builder: (BuildContext context) {
-            found = RmlTheme.of(context);
+            found = Theme.of(context);
             return const SizedBox();
           },
         ),

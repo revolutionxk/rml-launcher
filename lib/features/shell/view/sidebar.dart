@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
-import 'package:rml_launcher/design/icons/rml_icons.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/icons/icons.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
 import 'package:rml_launcher/features/shell/view/drag_area.dart';
 import 'package:rml_launcher/features/shell/view/nav_item.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
@@ -34,29 +34,29 @@ class Sidebar extends StatelessWidget {
             _item(
               context,
               Routes.home,
-              RmlIcons.house,
-              RmlIcons.houseFill,
+              Icons.house,
+              Icons.houseFill,
               t.nav.home,
             ),
             _item(
               context,
               Routes.library,
-              RmlIcons.stack,
-              RmlIcons.stackFill,
+              Icons.stack,
+              Icons.stackFill,
               t.nav.library,
             ),
             _item(
               context,
               Routes.store,
-              RmlIcons.storefront,
-              RmlIcons.storefrontFill,
+              Icons.storefront,
+              Icons.storefrontFill,
               t.nav.store,
             ),
             _item(
               context,
               Routes.search,
-              RmlIcons.magnifyingGlass,
-              RmlIcons.magnifyingGlassFill,
+              Icons.magnifyingGlass,
+              Icons.magnifyingGlassFill,
               t.nav.search,
               trailing: t.nav.searchShortcut(modifier: mac ? '⌘' : 'Ctrl'),
             ),
@@ -64,8 +64,8 @@ class Sidebar extends StatelessWidget {
             _item(
               context,
               Routes.settings,
-              RmlIcons.gearSix,
-              RmlIcons.gearSixFill,
+              Icons.gearSix,
+              Icons.gearSixFill,
               t.nav.settings,
             ),
           ],
@@ -101,7 +101,7 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
+    final ThemeData theme = Theme.of(context);
     return SizedBox(
       height: 40,
       child: Row(

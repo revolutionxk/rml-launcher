@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
-import 'package:rml_launcher/design/theme/rml_theme.dart';
-import 'package:rml_launcher/design/tokens/rml_colors.dart';
+import 'package:rml_launcher/design/theme/theme.dart';
+import 'package:rml_launcher/design/tokens/colors.dart';
 
 class SettingsSection extends StatelessWidget {
   const SettingsSection({
@@ -14,8 +14,8 @@ class SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
-    final RmlColors colors = theme.colors;
+    final ThemeData theme = Theme.of(context);
+    final ThemeColors colors = theme.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 28),
       child: Column(
@@ -62,7 +62,7 @@ class SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RmlThemeData theme = RmlTheme.of(context);
+    final ThemeData theme = Theme.of(context);
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 52),
       child: Padding(
