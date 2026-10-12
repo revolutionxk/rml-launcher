@@ -130,7 +130,10 @@ final class Downloader {
         },
       );
       if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable) {
-        await response.timeout(_readTimeout).drain<void>();
+        await _drain(response, abort);
+        if (abort.isAborted) {
+          return const Result<void>.err(CancelledFailure());
+        }
         if (existing > 0 && existing == request.size) {
           return await _verify(partial, request, sync);
         }
@@ -144,7 +147,10 @@ final class Downloader {
       }
       if (response.statusCode != HttpStatus.ok &&
           response.statusCode != HttpStatus.partialContent) {
-        await response.timeout(_readTimeout).drain<void>();
+        await _drain(response, abort);
+        if (abort.isAborted) {
+          return const Result<void>.err(CancelledFailure());
+        }
         return Result<void>.err(
           NetworkFailure(statusCode: response.statusCode),
         );
@@ -165,12 +171,10 @@ final class Downloader {
       final StreamIterator<List<int>> body = StreamIterator<List<int>>(
         response.timeout(_readTimeout),
       );
+      unawaited(abort.whenAborted.then((_) => body.cancel()));
       try {
         while (true) {
-          final bool more = await Future.any(<Future<bool>>[
-            body.moveNext(),
-            abort.whenAborted.then((_) => false),
-          ]);
+          final bool more = await body.moveNext();
           if (abort.isAborted) {
             return const Result<void>.err(CancelledFailure());
           }
@@ -203,6 +207,18 @@ final class Downloader {
         return const Result<void>.err(CancelledFailure());
       }
       return Result<void>.err(networkFailureOf(error, stackTrace));
+    }
+  }
+
+  Future<void> _drain(HttpClientResponse response, AbortSignal abort) async {
+    final StreamIterator<List<int>> body = StreamIterator<List<int>>(
+      response.timeout(_readTimeout),
+    );
+    unawaited(abort.whenAborted.then((_) => body.cancel()));
+    try {
+      while (await body.moveNext()) {}
+    } finally {
+      await body.cancel();
     }
   }
 
