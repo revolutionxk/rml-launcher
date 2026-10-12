@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "RML Launcher"
+  },
+  "nav": {
+    "home": "Início",
+    "library": "Biblioteca",
+    "store": "Loja",
+    "search": "Buscar",
+    "settings": "Configurações",
+    "searchShortcut": "{modifier} K"
+  },
+  "window": {
+    "minimize": "Minimizar",
+    "maximize": "Maximizar",
+    "close": "Fechar"
+  },
+  "settings": {
+    "appearance": "Aparência",
+    "colorTheme": "Tema de cores",
+    "mode": "Modo",
+    "reduceMotion": "Reduzir movimento",
+    "language": "Idioma",
+    "about": "Sobre",
+    "appVersion": "RML Launcher {version}",
+    "nativeVersion": "Biblioteca nativa {version}",
+    "palette": {
+      "blackAndBlue": "Preto e azul",
+      "stoneAndSand": "Pedra e areia",
+      "studioGrey": "Cinza do Studio"
+    },
+    "modes": {
+      "system": "Sistema",
+      "dark": "Escuro",
+      "light": "Claro"
+    },
+    "motion": {
+      "system": "Sistema",
+      "turnedOn": "Ligado",
+      "turnedOff": "Desligado"
+    },
+    "languages": {
+      "english": "English",
+      "portuguese": "Português (Brasil)"
+    }
+  }
+}
