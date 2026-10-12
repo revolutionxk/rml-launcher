@@ -49,27 +49,41 @@ final class StudioLifecycle {
     if (!root.existsSync()) {
       return;
     }
-    for (final FileSystemEntity install in root.listSync(followLinks: false)) {
-      final Directory builds = Directory(p.join(install.path, 'builds'));
-      if (install is! Directory || !builds.existsSync()) {
+    final List<FileSystemEntity> installs;
+    try {
+      installs = root.listSync(followLinks: false);
+    } on FileSystemException {
+      return;
+    }
+    for (final FileSystemEntity install in installs) {
+      if (install is! Directory) {
         continue;
       }
-      for (final FileSystemEntity entry in builds.listSync(
-        followLinks: false,
-      )) {
-        final String name = p.basename(entry.path);
-        if (!name.startsWith('.')) {
-          continue;
+      try {
+        await _clearInstall(Directory(p.join(install.path, 'builds')));
+      } on FileSystemException {
+        continue;
+      }
+    }
+  }
+
+  Future<void> _clearInstall(Directory builds) async {
+    if (!builds.existsSync()) {
+      return;
+    }
+    for (final FileSystemEntity entry in builds.listSync(followLinks: false)) {
+      final String name = p.basename(entry.path);
+      if (!name.startsWith('.')) {
+        continue;
+      }
+      try {
+        if (name.endsWith('.staging')) {
+          await deleteQuietly(entry.path);
+        } else if (name.endsWith('.replaced')) {
+          await _settleReplaced(builds.path, entry);
         }
-        try {
-          if (name.endsWith('.staging')) {
-            await deleteQuietly(entry.path);
-          } else if (name.endsWith('.replaced')) {
-            await _settleReplaced(builds.path, entry);
-          }
-        } on FileSystemException {
-          continue;
-        }
+      } on FileSystemException {
+        continue;
       }
     }
   }

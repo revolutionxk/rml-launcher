@@ -49,7 +49,7 @@ final class StudioEngine {
     required this.discovery,
     required this.launcher,
     required this.lifecycle,
-    required this._client,
+    required this._ownedClient,
   });
 
   static Future<StudioEngine> create({
@@ -205,7 +205,7 @@ final class StudioEngine {
         updates: updates,
         running: running,
       ),
-      client: http,
+      ownedClient: client == null ? http : null,
     );
   }
 
@@ -221,11 +221,11 @@ final class StudioEngine {
   final DiscoveryService discovery;
   final LaunchService launcher;
   final StudioLifecycle lifecycle;
-  final HttpClient _client;
+  final HttpClient? _ownedClient;
 
   Future<void> dispose() async {
     await lifecycle.dispose();
-    _client.close(force: true);
+    _ownedClient?.close(force: true);
     await events.close();
     await library.close();
   }

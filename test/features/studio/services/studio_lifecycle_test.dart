@@ -65,7 +65,11 @@ void main() {
   test('start clears leftovers, scans and checks for updates', () async {
     Directory(builds('.0.691.0.1.staging')).createSync(recursive: true);
     Directory(builds('.0.690.0.1.replaced')).createSync(recursive: true);
-    Directory(builds('0.690.0.1')).createSync(recursive: true);
+    File(p.join(builds('.0.690.0.1.replaced'), 'old.txt'))
+        .writeAsStringSync('old');
+    File(p.join(builds('0.690.0.1'), 'new.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('new');
     final File partial = File(
       p.join(
         harness.layout.root,
@@ -77,7 +81,8 @@ void main() {
     await lifecycle.start();
     expect(Directory(builds('.0.691.0.1.staging')).existsSync(), isFalse);
     expect(Directory(builds('.0.690.0.1.replaced')).existsSync(), isFalse);
-    expect(Directory(builds('0.690.0.1')).existsSync(), isTrue);
+    expect(File(p.join(builds('0.690.0.1'), 'new.txt')).existsSync(), isTrue);
+    expect(File(p.join(builds('0.690.0.1'), 'old.txt')).existsSync(), isFalse);
     expect(partial.existsSync(), isTrue);
     expect(provider.scans, 1);
     await until(() => harness.cdn.liveRequests == 1);
@@ -88,7 +93,7 @@ void main() {
     await until(() => harness.cdn.liveRequests == 1);
     await lifecycle.onFocus();
     expect(provider.scans, 2);
-    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(harness.cdn.liveRequests, 1);
     now = now.add(const Duration(minutes: 20));
     await lifecycle.onFocus();
@@ -111,6 +116,18 @@ void main() {
       );
     },
   );
+
+  test('start carries on when an install folder cannot be listed', () async {
+    final String locked = harness.layout.buildsDir('locked');
+    Directory(p.join(locked, '.0.1.0.0.staging')).createSync(recursive: true);
+    Directory(builds('.0.691.0.1.staging')).createSync(recursive: true);
+    Process.runSync('chmod', <String>['000', locked]);
+    addTearDown(() => Process.runSync('chmod', <String>['755', locked]));
+    await lifecycle.start();
+    expect(Directory(builds('.0.691.0.1.staging')).existsSync(), isFalse);
+    expect(provider.scans, 1);
+    await until(() => harness.cdn.liveRequests == 1);
+  }, skip: Platform.isWindows);
 
   test('visibility changes the polling interval', () async {
     await lifecycle.start();
