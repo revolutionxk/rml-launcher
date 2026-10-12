@@ -47,6 +47,7 @@ extern "C"
 
 	RML_API int32_t rml_os_reduce_motion(void);
 	RML_API int32_t rml_disk_free(const char* path, uint64_t* out_bytes);
+	RML_API int32_t rml_executable_info(const char* path, char** out_json);
 
 #ifdef __cplusplus
 }

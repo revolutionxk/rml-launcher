@@ -15,13 +15,13 @@ find_package(Threads REQUIRED)
 
 if (APPLE)
     enable_language(OBJCXX)
-    set(RML_OS_SOURCES src/os/reduce_motion_mac.mm)
-    set(RML_OS_LIBRARIES "-framework AppKit")
+    set(RML_OS_SOURCES src/os/reduce_motion_mac.mm src/exe/bundle_info_mac.cpp)
+    set(RML_OS_LIBRARIES "-framework AppKit" "-framework CoreFoundation")
 elseif (WIN32)
-    set(RML_OS_SOURCES src/os/reduce_motion_win.cpp)
+    set(RML_OS_SOURCES src/os/reduce_motion_win.cpp src/exe/bundle_info_other.cpp)
     set(RML_OS_LIBRARIES user32)
 else ()
-    set(RML_OS_SOURCES src/os/reduce_motion_other.cpp)
+    set(RML_OS_SOURCES src/os/reduce_motion_other.cpp src/exe/bundle_info_other.cpp)
     set(RML_OS_LIBRARIES "")
 endif ()
 
@@ -29,13 +29,16 @@ add_library(rml_objects OBJECT)
 target_sources(rml_objects PRIVATE
     src/api/boundary.cpp
     src/api/disk.cpp
+    src/api/executable.cpp
     src/api/hash.cpp
     src/api/json.cpp
     src/api/library.cpp
     src/api/os.cpp
+    src/exe/pe_version.cpp
     src/fs/disk.cpp
     src/hash/algorithm.cpp
     src/platform/path.cpp
+    src/platform/text.cpp
     ${RML_OS_SOURCES}
 )
 target_include_directories(rml_objects PUBLIC include src)
@@ -68,6 +71,7 @@ if (RML_NATIVE_TESTS)
         tests/main.cpp
         tests/api_test.cpp
         tests/disk_test.cpp
+        tests/executable_test.cpp
         tests/hash_test.cpp
         tests/json_test.cpp
     )
