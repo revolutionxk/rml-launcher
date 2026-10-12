@@ -168,6 +168,101 @@ void main() {
     expect(harness.library.value.installs, isEmpty);
   });
 
+  test('an install without a build downloads live into it', () async {
+    await start(
+      installs: <StudioInstall>[
+        managedInstall('main').copyWith(name: 'My Studio'),
+      ],
+    );
+    final Result<void> result = await service.download('main');
+    expect(result.isOk, isTrue);
+    final StudioInstall install = harness.library.value.byId('main')!;
+    expect(install.current!.version, live);
+    expect(install.name, 'My Studio');
+    expect(install.policy, UpdatePolicy.followLive);
+    expect(harness.installer.requests.single.guid, 'version-live');
+    expect(harness.tasks.tasks.single.kind, TaskKind.install);
+    await Future<void>.delayed(Duration.zero);
+    expect(harness.seen.whereType<BuildInstalled>(), hasLength(1));
+  });
+
+  test('a download can ask for a version', () async {
+    await start(installs: <StudioInstall>[managedInstall('main')]);
+    harness.cdn.guids['0.600.0.1'] = 'version-old';
+    final Result<void> result = await service.download(
+      'main',
+      version: StudioVersion.parse('0.600.0.1'),
+    );
+    expect(result.isOk, isTrue);
+    expect(
+      harness.library.value.byId('main')!.current!.version.text,
+      '0.600.0.1',
+    );
+    expect(harness.installer.requests.single.guid, 'version-old');
+  });
+
+  test('a download waits its turn behind another task', () async {
+    await start();
+    harness.installer.gate = Completer<void>();
+    final Future<Result<StudioInstall>> creating = service.create(
+      name: 'Main',
+      look: orange,
+    );
+    await until(() => harness.tasks.isBusy('main'));
+    expect(
+      (await service.download('main')).failureOrNull,
+      isA<TaskBusyFailure>(),
+    );
+    harness.installer.gate!.complete();
+    expect((await creating).isOk, isTrue);
+  });
+
+  test('only a managed install without a build can download', () async {
+    await start(
+      installs: <StudioInstall>[
+        foundInstall('roblox-1', InstallSource.roblox),
+        managedInstall('built', current: buildAt('/s/built/builds/1')),
+      ],
+    );
+    expect(
+      (await service.download('roblox-1')).failureOrNull,
+      isA<ValidationFailure>(),
+    );
+    expect(
+      (await service.download('built')).failureOrNull,
+      isA<ValidationFailure>(),
+    );
+    expect(
+      (await service.download('missing')).failureOrNull,
+      isA<NotFoundFailure>(),
+    );
+    expect(harness.installer.requests, isEmpty);
+  });
+
+  test('systems without downloads refuse to download a build', () async {
+    await start(
+      os: HostOs.linux,
+      downloads: false,
+      installs: <StudioInstall>[managedInstall('main')],
+    );
+    expect(
+      (await service.download('main')).failureOrNull,
+      isA<UnsupportedFailure>(),
+    );
+  });
+
+  test('a build downloaded later drops the stale retry of a create', () async {
+    await start();
+    harness.installer.failWith = const NetworkFailure();
+    await service.create(name: 'Main', look: orange);
+    final String failed = harness.tasks.tasks.single.id;
+    harness.installer.failWith = null;
+    expect((await service.download('main')).isOk, isTrue);
+    expect(harness.tasks.canRetry(failed), isFalse);
+    expect(harness.tasks.retry(failed), isNull);
+    expect(harness.installer.requests, hasLength(2));
+  });
+
   test('uninstall removes the folder and the record', () async {
     await start();
     await service.create(name: 'Main', look: orange);

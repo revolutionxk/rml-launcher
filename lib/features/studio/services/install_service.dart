@@ -83,6 +83,38 @@ final class InstallService {
     return Result<StudioInstall>.ok(_library.value.byId(id)!);
   }
 
+  Future<Result<void>> download(
+    String installId, {
+    StudioVersion? version,
+  }) async {
+    final StudioInstall? install = _library.value.byId(installId);
+    if (install == null) {
+      return const Result<void>.err(NotFoundFailure(what: 'install'));
+    }
+    if (!install.isManaged) {
+      return const Result<void>.err(
+        ValidationFailure(
+          message: 'Only installs RML manages can download a build.',
+        ),
+      );
+    }
+    if (install.current != null) {
+      return Result<void>.err(
+        ValidationFailure(message: '${install.name} already has a build.'),
+      );
+    }
+    if (!_fetcher.available) {
+      return const Result<void>.err(BuildFetcher.unavailable);
+    }
+    final Result<InstalledBuild> fetched = await _fetcher.fetch(
+      installId,
+      kind: TaskKind.install,
+      version: version,
+      apply: (InstalledBuild installed) => _setCurrent(installId, installed),
+    );
+    return fetched.map((_) {});
+  }
+
   Future<Result<void>> uninstall(String installId) async {
     final StudioInstall? install = _library.value.byId(installId);
     if (install == null) {
@@ -259,6 +291,7 @@ final class InstallService {
       }
       return const Result<void>.err(NotFoundFailure(what: 'install'));
     }
+    _tasks.forgetRetries(installId);
     final String? replaced = installed.replacedDir;
     if (replaced != null) {
       await deleteQuietly(replaced);
