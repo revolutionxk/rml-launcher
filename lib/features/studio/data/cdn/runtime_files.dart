@@ -1,0 +1,30 @@
+abstract final class RuntimeFiles {
+  static const String appSettingsXml =
+      '<Settings>\n'
+      '    <ContentFolder>content</ContentFolder>\n'
+      '    <BaseUrl>http://www.roblox.com</BaseUrl>\n'
+      '</Settings>\n';
+
+  static const String oauth2ConfigJson = '''
+{
+  "distributors": {
+    "vanilla": {
+      "clientId": "7968549422692352298",
+      "metadataUrl": "https://apis.roblox.com/oauth/.well-known/openid-configuration"
+    },
+    "Global": {
+      "clientId": "7968549422692352298",
+      "metadataUrl": "https://apis.roblox.com/oauth/.well-known/openid-configuration"
+    },
+    "cjv": {
+      "clientId": "6154550030602747221",
+      "metadataUrl": "https://apis.roblox.qq.com/oauth/.well-known/openid-configuration"
+    },
+    "ChinaJointVenture": {
+      "clientId": "6154550030602747221",
+      "metadataUrl": "https://apis.roblox.qq.com/oauth/.well-known/openid-configuration"
+    }
+  }
+}
+''';
+}
