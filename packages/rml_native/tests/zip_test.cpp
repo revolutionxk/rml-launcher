@@ -74,6 +74,9 @@ TEST_CASE("entry names are normalised or refused")
 	CHECK_FALSE(safe_entry_path("\\abs.txt"));
 	CHECK_FALSE(safe_entry_path("C:/drive.txt"));
 	CHECK_FALSE(safe_entry_path("C:\\drive.txt"));
+	CHECK_FALSE(safe_entry_path("./C:/x"));
+	CHECK_FALSE(safe_entry_path(".\\C:\\x"));
+	CHECK_FALSE(safe_entry_path("a:b"));
 	CHECK_FALSE(safe_entry_path(std::string_view("nul\0name", 8)));
 }
 
@@ -180,5 +183,42 @@ TEST_CASE("links that point outside the destination are refused")
 	const auto result = extract(archive(dir, {{"evil", "../../outside", 0120777}}), dir.path() / "out");
 	REQUIRE_FALSE(result.has_value());
 	CHECK(result.error().message.find("Unsafe link") != std::string::npos);
+}
+
+TEST_CASE("a bad link refuses the archive before any file is written")
+{
+	const TempDirectory dir("rml native zip late link");
+	const auto result = extract(archive(dir, {{"ok.txt", "ok"}, {"evil", "../../outside", 0120777}}), dir.path() / "out");
+	REQUIRE_FALSE(result.has_value());
+	CHECK_FALSE(std::filesystem::exists(dir.path() / "out" / "ok.txt"));
+}
+
+TEST_CASE("a link whose text holds a nul byte is refused")
+{
+	const TempDirectory dir("rml native zip nul link");
+	const auto result = extract(archive(dir, {{"evil", std::string("a\0../../x", 9), 0120777}}), dir.path() / "out");
+	REQUIRE_FALSE(result.has_value());
+	CHECK(result.error().message.find("Unsafe link") != std::string::npos);
+}
+
+TEST_CASE("an entry beneath a link of the same archive is refused")
+{
+	const TempDirectory dir("rml native zip through link");
+	const auto result = extract(archive(dir, {{"link", "dir", 0120777}, {"link/evil.txt", "x"}}), dir.path() / "out");
+	REQUIRE_FALSE(result.has_value());
+	CHECK(result.error().message.find("Unsafe path") != std::string::npos);
+	CHECK_FALSE(std::filesystem::exists(dir.path() / "out" / "dir" / "evil.txt"));
+}
+
+TEST_CASE("chained framework links are accepted")
+{
+	const TempDirectory dir("rml native zip chain");
+	const auto zip = archive(dir, {{"F.framework/Versions/A/F", "bin", 0100755}, {"F.framework/Versions/Current", "A", 0120777}, {"F.framework/F", "Versions/Current/F", 0120777}});
+	const auto out = dir.path() / "out";
+	const auto result = extract(zip, out);
+	REQUIRE(result.has_value());
+	CHECK(std::filesystem::read_symlink(out / "F.framework" / "Versions" / "Current") == "A");
+	CHECK(std::filesystem::read_symlink(out / "F.framework" / "F") == "Versions/Current/F");
+	CHECK(read(out / "F.framework" / "F") == "bin");
 }
 #endif

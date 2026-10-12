@@ -24,7 +24,7 @@ namespace rml::zip
 			const std::string_view segment(part.begin(), part.end());
 			if (segment.empty() || segment == ".")
 				continue;
-			if (segment == "..")
+			if (segment == ".." || segment.contains(':'))
 				return std::nullopt;
 			if (!safe.empty())
 				safe += '/';

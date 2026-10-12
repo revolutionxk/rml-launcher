@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <miniz.h>
+#include <set>
 #include <system_error>
 #include <utility>
 
@@ -20,6 +21,7 @@ namespace rml::zip
 			std::uint32_t mode;
 			bool directory;
 			bool symlink;
+			std::string link;
 		};
 
 		class Reader
@@ -103,7 +105,7 @@ namespace rml::zip
 			}
 
 		private:
-			static constexpr std::uint64_t step = 4 << 20;
+			static constexpr std::uint64_t step = std::uint64_t{4} << 20;
 
 			const Progress& m_progress;
 			std::uint64_t m_total;
@@ -131,11 +133,49 @@ namespace rml::zip
 		return name;
 	}
 
+	static std::size_t append_chunk(void* opaque, const mz_uint64, const void* buffer, const std::size_t size)
+	{
+		static_cast<std::string*>(opaque)->append(static_cast<const char*>(buffer), size);
+		return size;
+	}
+
+	[[nodiscard]] static bool escapes(const std::filesystem::path& root, const std::filesystem::path& candidate)
+	{
+		const auto relative = candidate.lexically_normal().lexically_relative(root.lexically_normal());
+		return relative.empty() || *relative.begin() == "..";
+	}
+
+	static constexpr std::uint64_t max_link_size = 4096;
+
+	[[nodiscard]] static bool inside(const std::filesystem::path& root, const std::filesystem::path& candidate)
+	{
+		std::error_code ec;
+		const auto resolved = std::filesystem::weakly_canonical(candidate, ec);
+		return !ec && !escapes(root, resolved);
+	}
+
+	[[nodiscard]] static bool safe_link_text(const std::string& link, const std::filesystem::path& folder)
+	{
+		if (link.empty() || link.contains('\0') || link.contains(':'))
+			return false;
+		const auto link_target = platform::path_from_utf8(link);
+		return !link_target.is_absolute() && !link.starts_with('/') && !escapes(".", (folder / link_target).lexically_normal());
+	}
+
+	[[nodiscard]] static std::expected<std::string, Error> read_link(Reader& reader, const mz_uint index, const std::string& name)
+	{
+		std::string link;
+		if (!mz_zip_reader_extract_to_callback(reader.get(), index, &append_chunk, &link, 0))
+			return fail("Can't extract " + name + ": " + reader.last_error());
+		return link;
+	}
+
 	[[nodiscard]] static std::expected<std::vector<Entry>, Error> list_entries(Reader& reader)
 	{
 		auto* const zip = reader.get();
 		const auto count = mz_zip_reader_get_num_files(zip);
 		std::vector<Entry> entries;
+		std::set<std::string> links;
 		entries.reserve(count);
 		for (mz_uint index = 0; index < count; ++index)
 		{
@@ -157,7 +197,25 @@ namespace rml::zip
 #else
 			const bool symlink = !directory && (mode & file_type_mask) == symlink_type;
 #endif
-			entries.push_back({index, std::move(*path), stat.m_uncomp_size, mode, directory, symlink});
+			for (auto cut = path->find('/'); cut != std::string::npos; cut = path->find('/', cut + 1))
+			{
+				if (links.contains(path->substr(0, cut)))
+					return fail("Unsafe path in archive: " + name);
+			}
+			std::string link;
+			if (symlink)
+			{
+				if (stat.m_uncomp_size > max_link_size)
+					return fail("Unsafe link in archive: " + *path);
+				auto text = read_link(reader, index, *path);
+				if (!text)
+					return std::unexpected(text.error());
+				link = std::move(*text);
+				if (!safe_link_text(link, std::filesystem::path(platform::path_from_utf8(*path)).parent_path()))
+					return fail("Unsafe link in archive: " + *path);
+				links.insert(*path);
+			}
+			entries.push_back({index, std::move(*path), stat.m_uncomp_size, mode, directory, symlink, std::move(link)});
 		}
 		return entries;
 	}
@@ -170,12 +228,6 @@ namespace rml::zip
 			return 0;
 		sink.written += size;
 		sink.tracker.advance(size);
-		return size;
-	}
-
-	static std::size_t append_chunk(void* opaque, const mz_uint64, const void* buffer, const std::size_t size)
-	{
-		static_cast<std::string*>(opaque)->append(static_cast<const char*>(buffer), size);
 		return size;
 	}
 
@@ -197,28 +249,20 @@ namespace rml::zip
 			return fail("Size mismatch for " + entry.path);
 #if !defined(_WIN32)
 		if ((entry.mode & 0777) != 0)
+		{
 			std::filesystem::permissions(target, static_cast<std::filesystem::perms>(entry.mode & 0777), ec);
+			if (ec)
+				return fail("Can't set permissions on " + entry.path + ": " + ec.message());
+		}
 #endif
 		return sink.written;
 	}
 
-	[[nodiscard]] static bool escapes(const std::filesystem::path& root, const std::filesystem::path& candidate)
+	[[nodiscard]] static std::expected<void, Error> make_symlink(const Entry& entry, const std::filesystem::path& target)
 	{
-		const auto relative = candidate.lexically_normal().lexically_relative(root.lexically_normal());
-		return relative.empty() || *relative.begin() == "..";
-	}
-
-	[[nodiscard]] static std::expected<void, Error> make_symlink(Reader& reader, const Entry& entry, const std::filesystem::path& destination, const std::filesystem::path& target)
-	{
-		std::string link;
-		if (!mz_zip_reader_extract_to_callback(reader.get(), entry.index, &append_chunk, &link, 0))
-			return fail("Can't extract " + entry.path + ": " + reader.last_error());
-		const auto link_target = platform::path_from_utf8(link);
-		if (link.empty() || link_target.is_absolute() || escapes(destination, target.parent_path() / link_target))
-			return fail("Unsafe link in archive: " + entry.path);
 		std::error_code ec;
 		std::filesystem::remove(target, ec);
-		std::filesystem::create_symlink(link_target, target, ec);
+		std::filesystem::create_symlink(platform::path_from_utf8(entry.link), target, ec);
 		if (ec)
 			return fail("Can't create link " + entry.path + ": " + ec.message());
 		return {};
@@ -242,11 +286,17 @@ namespace rml::zip
 		std::filesystem::create_directories(destination, ec);
 		if (ec)
 			return fail("Can't create " + platform::to_utf8(destination));
+		const auto root = std::filesystem::canonical(destination, ec);
+		if (ec)
+			return fail("Can't resolve " + platform::to_utf8(destination));
 		Tracker tracker(progress, total);
 		Extraction extraction;
+		std::vector<const Entry*> links;
 		for (const auto& entry : *entries)
 		{
 			const auto target = destination / platform::path_from_utf8(entry.path);
+			if (!inside(root, entry.directory ? target : target.parent_path()))
+				return fail("Unsafe path in archive: " + entry.path);
 			std::filesystem::create_directories(entry.directory ? target : target.parent_path(), ec);
 			if (ec)
 				return fail("Can't create the folder for " + entry.path);
@@ -254,8 +304,9 @@ namespace rml::zip
 				continue;
 			if (entry.symlink)
 			{
-				if (auto linked = make_symlink(reader, entry, destination, target); !linked)
+				if (auto linked = make_symlink(entry, target); !linked)
 					return std::unexpected(linked.error());
+				links.push_back(&entry);
 				tracker.advance(entry.size);
 				continue;
 			}
@@ -264,6 +315,12 @@ namespace rml::zip
 				return std::unexpected(written.error());
 			extraction.files.push_back({entry.path, *written});
 			extraction.bytes += *written;
+		}
+		for (const auto* link : links)
+		{
+			const auto folder = (destination / platform::path_from_utf8(link->path)).parent_path();
+			if (!inside(root, folder / platform::path_from_utf8(link->link)))
+				return fail("Unsafe link in archive: " + link->path);
 		}
 		tracker.report();
 		return extraction;

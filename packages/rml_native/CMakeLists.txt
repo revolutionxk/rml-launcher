@@ -63,6 +63,7 @@ target_sources(rml_objects PRIVATE
 target_include_directories(rml_objects PUBLIC include src)
 target_compile_features(rml_objects PUBLIC cxx_std_23)
 target_compile_definitions(rml_objects PUBLIC RML_BUILDING RML_NATIVE_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(rml_objects PRIVATE MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 target_link_libraries(rml_objects PUBLIC ${RML_LIBRARIES})
 
 if (MSVC)
