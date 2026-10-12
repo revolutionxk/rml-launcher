@@ -26,6 +26,8 @@ final class AppSettings {
     required this.mode,
     required this.reduceMotion,
     this.language,
+    this.studioRoot,
+    this.installUpdatesBeforeLaunch = false,
   });
 
   factory AppSettings.fromJson(JsonMap json) => AppSettings(
@@ -39,6 +41,10 @@ final class AppSettings {
     language: AppLanguage.fromTag(
       json['language'] is String ? json['language']! as String : null,
     ),
+    studioRoot: json['studioRoot'] is String
+        ? json['studioRoot']! as String
+        : null,
+    installUpdatesBeforeLaunch: json['installUpdatesBeforeLaunch'] == true,
   );
 
   static const AppSettings defaults = AppSettings(
@@ -51,17 +57,24 @@ final class AppSettings {
   final ModeSetting mode;
   final ReduceMotionSetting reduceMotion;
   final AppLanguage? language;
+  final String? studioRoot;
+  final bool installUpdatesBeforeLaunch;
 
   AppSettings copyWith({
     Palette? palette,
     ModeSetting? mode,
     ReduceMotionSetting? reduceMotion,
     AppLanguage? language,
+    String? studioRoot,
+    bool? installUpdatesBeforeLaunch,
   }) => AppSettings(
     palette: palette ?? this.palette,
     mode: mode ?? this.mode,
     reduceMotion: reduceMotion ?? this.reduceMotion,
     language: language ?? this.language,
+    studioRoot: studioRoot ?? this.studioRoot,
+    installUpdatesBeforeLaunch:
+        installUpdatesBeforeLaunch ?? this.installUpdatesBeforeLaunch,
   );
 
   JsonMap toJson() => <String, Object?>{
@@ -69,6 +82,8 @@ final class AppSettings {
     'mode': mode.name,
     'reduceMotion': reduceMotion.name,
     'language': language?.tag,
+    'studioRoot': studioRoot,
+    'installUpdatesBeforeLaunch': installUpdatesBeforeLaunch,
   };
 
   @override
@@ -77,10 +92,19 @@ final class AppSettings {
       other.palette == palette &&
       other.mode == mode &&
       other.reduceMotion == reduceMotion &&
-      other.language == language;
+      other.language == language &&
+      other.studioRoot == studioRoot &&
+      other.installUpdatesBeforeLaunch == installUpdatesBeforeLaunch;
 
   @override
-  int get hashCode => Object.hash(palette, mode, reduceMotion, language);
+  int get hashCode => Object.hash(
+    palette,
+    mode,
+    reduceMotion,
+    language,
+    studioRoot,
+    installUpdatesBeforeLaunch,
+  );
 
   static T _byName<T extends Enum>(List<T> values, Object? raw, T fallback) {
     if (raw is! String) {

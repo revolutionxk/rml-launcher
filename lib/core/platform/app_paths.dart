@@ -15,7 +15,7 @@ HostOs currentHostOs() {
 }
 
 final class AppPaths {
-  const AppPaths({required this.dataDir});
+  const AppPaths({required this.dataDir, required this.localDir});
 
   factory AppPaths.resolve({
     required HostOs os,
@@ -34,12 +34,20 @@ final class AppPaths {
       ),
       HostOs.linux => p.posix.join(_linuxDataHome(environment), _folder),
     };
-    return AppPaths(dataDir: dataDir);
+    final String localDir = switch (os) {
+      HostOs.windows => p.windows.join(
+        _required(environment, 'LOCALAPPDATA'),
+        _folder,
+      ),
+      HostOs.macos || HostOs.linux => dataDir,
+    };
+    return AppPaths(dataDir: dataDir, localDir: localDir);
   }
 
   static const String _folder = 'RMLLauncher';
 
   final String dataDir;
+  final String localDir;
 
   static String _linuxDataHome(Map<String, String> environment) {
     final String? xdg = environment['XDG_DATA_HOME'];

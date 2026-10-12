@@ -17,7 +17,7 @@ AppDependencies testDependencies({
 }) {
   final MemoryJsonStore memory = store ?? MemoryJsonStore();
   return AppDependencies(
-    paths: const AppPaths(dataDir: '/tmp/rml-test'),
+    paths: const AppPaths(dataDir: '/tmp/rml-test', localDir: '/tmp/rml-test'),
     store: memory,
     settingsRepository: SettingsRepository(memory),
     initialSettings: settings,

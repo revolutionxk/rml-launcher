@@ -2,14 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/core/platform/app_paths.dart';
 
 void main() {
-  test('windows uses roaming app data', () {
+  test('windows uses roaming app data and local app data', () {
     final AppPaths paths = AppPaths.resolve(
       os: HostOs.windows,
       environment: <String, String>{
         'APPDATA': r'C:\Users\João\AppData\Roaming',
+        'LOCALAPPDATA': r'C:\Users\João\AppData\Local',
       },
     );
     expect(paths.dataDir, r'C:\Users\João\AppData\Roaming\RMLLauncher');
+    expect(paths.localDir, r'C:\Users\João\AppData\Local\RMLLauncher');
   });
 
   test('macos uses application support', () {
@@ -18,6 +20,7 @@ void main() {
       environment: <String, String>{'HOME': '/Users/ana'},
     );
     expect(paths.dataDir, '/Users/ana/Library/Application Support/RMLLauncher');
+    expect(paths.localDir, paths.dataDir);
   });
 
   test('linux prefers XDG_DATA_HOME', () {
