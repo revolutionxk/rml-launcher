@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
+import 'package:rml_launcher/core/storage/file_ops.dart';
 
 typedef JsonMap = Map<String, Object?>;
 
@@ -82,7 +83,7 @@ final class FileJsonStore implements JsonStore {
       } finally {
         await handle.close();
       }
-      await _replace(temp, file.path);
+      await renameWithRetry(temp, file.path);
       return const Result<void>.ok(null);
     } on FileSystemException catch (error, stackTrace) {
       await _discard(temp);
@@ -91,24 +92,6 @@ final class FileJsonStore implements JsonStore {
       );
     }
   }
-
-  Future<void> _replace(File temp, String target) async {
-    for (int attempt = 1; ; attempt++) {
-      try {
-        await temp.rename(target);
-        return;
-      } on FileSystemException catch (error) {
-        if (attempt == 5 || !_isTransientLock(error)) {
-          rethrow;
-        }
-        await Future<void>.delayed(Duration(milliseconds: 10 << attempt));
-      }
-    }
-  }
-
-  bool _isTransientLock(FileSystemException error) =>
-      Platform.isWindows &&
-      const <int>{5, 32}.contains(error.osError?.errorCode);
 
   Future<void> _discard(File temp) async {
     try {
