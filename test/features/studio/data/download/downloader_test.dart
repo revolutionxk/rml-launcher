@@ -244,25 +244,59 @@ void main() {
     );
   });
 
-  test('an abort stops the transfer and keeps the partial', () async {
-    server.fault('setup/pkg.zip', const StallFault(1000));
-    final AbortSignal abort = AbortSignal();
-    final Result<void> result = await downloader().download(
-      request(),
-      abort: abort,
-      onBytes: (int delta) {
-        if (delta > 0) {
-          abort.abort();
-        }
-      },
-    );
-    expect(result.failureOrNull, isA<CancelledFailure>());
-    expect(
-      partial().lengthSync(),
-      allOf(greaterThan(0), lessThanOrEqualTo(1000)),
-    );
-    expect(server.hits('setup/pkg.zip'), 1);
-  });
+  test(
+    'an abort on a flowing transfer stops it and keeps the partial',
+    () async {
+      final Uint8List big = Uint8List(16 << 20);
+      server.serve('setup/big.zip', big);
+      final AbortSignal abort = AbortSignal();
+      final Stopwatch watch = Stopwatch()..start();
+      final Result<void> result = await downloader().download(
+        DownloadRequest(
+          url: server.base.resolve('setup/big.zip'),
+          path: p.join(dir.path, 'big.zip'),
+          size: big.length,
+        ),
+        abort: abort,
+        onBytes: (int delta) {
+          if (delta > 0) {
+            abort.abort();
+          }
+        },
+      );
+      expect(result.failureOrNull, isA<CancelledFailure>());
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      final File part = File(p.join(dir.path, 'big.zip.partial'));
+      expect(part.existsSync(), isTrue);
+      expect(part.lengthSync(), lessThan(big.length));
+      expect(File(p.join(dir.path, 'big.zip')).existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'an abort on a stalled transfer does not wait for the timeout',
+    () async {
+      server.fault('setup/pkg.zip', const StallFault(1000));
+      final AbortSignal abort = AbortSignal();
+      final Stopwatch watch = Stopwatch()..start();
+      final Result<void> result =
+          await downloader(
+            retry: RetryPolicy.none,
+            timeout: const Duration(seconds: 30),
+          ).download(
+            request(),
+            abort: abort,
+            onBytes: (int delta) {
+              if (delta > 0) {
+                abort.abort();
+              }
+            },
+          );
+      expect(result.failureOrNull, isA<CancelledFailure>());
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(partial().existsSync(), isTrue);
+    },
+  );
 
   test('works with text bodies too', () async {
     server.serve('setup/a.txt', utf8.encode('hello'));

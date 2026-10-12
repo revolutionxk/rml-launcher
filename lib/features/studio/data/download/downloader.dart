@@ -50,7 +50,11 @@ final class Downloader {
     }
 
     final File target = File(request.path);
-    if (await _isVerified(target, request)) {
+    final Result<bool> reusable = await _isVerified(target, request);
+    if (reusable.isErr) {
+      return Result<void>.err(reusable.failureOrNull!);
+    }
+    if (reusable.valueOrNull!) {
       sync(target.lengthSync());
       return const Result<void>.ok(null);
     }
@@ -69,22 +73,33 @@ final class Downloader {
               failure.statusCode == HttpStatus.requestedRangeNotSatisfiable ||
               isRetryableStatus(failure.statusCode!)));
 
-  Future<bool> _isVerified(File file, DownloadRequest request) async {
+  Future<Result<bool>> _isVerified(File file, DownloadRequest request) async {
     if (!file.existsSync()) {
-      return false;
+      return const Result<bool>.ok(false);
     }
     final int? size = request.size;
     final String? md5 = request.md5;
     bool verified = size == null || file.lengthSync() == size;
     if (verified && md5 != null) {
-      verified =
-          (await _native.hashFile(HashAlgorithm.md5, file.path)).valueOrNull ==
-          md5;
+      final Result<String> hash = await _native.hashFile(
+        HashAlgorithm.md5,
+        file.path,
+      );
+      if (hash.isErr) {
+        return Result<bool>.err(hash.failureOrNull!);
+      }
+      verified = hash.valueOrNull == md5;
     }
     if (!verified) {
-      await file.delete();
+      try {
+        await file.delete();
+      } on FileSystemException catch (error, stackTrace) {
+        return Result<bool>.err(
+          IoFailure(path: file.path, cause: error, stackTrace: stackTrace),
+        );
+      }
     }
-    return verified;
+    return Result<bool>.ok(verified);
   }
 
   Future<Result<void>> _attempt(
@@ -119,7 +134,9 @@ final class Downloader {
         if (existing > 0 && existing == request.size) {
           return await _verify(partial, request, sync);
         }
-        await partial.delete();
+        if (partial.existsSync()) {
+          await partial.delete();
+        }
         sync(0);
         return const Result<void>.err(
           NetworkFailure(statusCode: HttpStatus.requestedRangeNotSatisfiable),
@@ -136,16 +153,37 @@ final class Downloader {
           response.statusCode == HttpStatus.partialContent && existing > 0;
       int written = resumed ? existing : 0;
       sync(written);
-      final RandomAccessFile file = await partial.open(
-        mode: resumed ? FileMode.append : FileMode.write,
+      final RandomAccessFile file;
+      try {
+        file = await partial.open(
+          mode: resumed ? FileMode.append : FileMode.write,
+        );
+      } on FileSystemException {
+        await response.listen(null).cancel();
+        rethrow;
+      }
+      final StreamIterator<List<int>> body = StreamIterator<List<int>>(
+        response.timeout(_readTimeout),
       );
       try {
-        await for (final List<int> chunk in response.timeout(_readTimeout)) {
+        while (true) {
+          final bool more = await Future.any(<Future<bool>>[
+            body.moveNext(),
+            abort.whenAborted.then((_) => false),
+          ]);
+          if (abort.isAborted) {
+            return const Result<void>.err(CancelledFailure());
+          }
+          if (!more) {
+            break;
+          }
+          final List<int> chunk = body.current;
           await file.writeFrom(chunk);
           written += chunk.length;
           sync(written);
         }
       } finally {
+        await body.cancel();
         await file.close();
       }
       return await _verify(partial, request, sync);
@@ -156,6 +194,9 @@ final class Downloader {
         IoFailure(path: partial.path, cause: error, stackTrace: stackTrace),
       );
     } on TimeoutException catch (error, stackTrace) {
+      if (abort.isAborted) {
+        return const Result<void>.err(CancelledFailure());
+      }
       return Result<void>.err(networkFailureOf(error, stackTrace));
     } on IOException catch (error, stackTrace) {
       if (abort.isAborted) {
