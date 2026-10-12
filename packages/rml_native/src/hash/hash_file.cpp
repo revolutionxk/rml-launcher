@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "hash/hex.h"
@@ -59,6 +60,10 @@ std::string hash_bytes(Algorithm algorithm, std::span<const std::uint8_t> data) 
 }
 
 Outcome hash_file(Algorithm algorithm, const std::filesystem::path& path) {
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(path, error)) {
+    return {false, "Not a file: " + path_to_utf8(path)};
+  }
   return algorithm == Algorithm::md5 ? digest_file<Md5>(path) : digest_file<Sha256>(path);
 }
 

@@ -29,6 +29,7 @@ class SettingsScreen extends ConsumerWidget {
           TranslationProvider.of(context).locale.languageTag,
         ) ??
         AppLanguage.english;
+    final String? nativeVersion = ref.watch(nativeServiceProvider).version;
     return PageScaffold(
       title: t.nav.settings,
       children: <Widget>[
@@ -138,17 +139,16 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                t.settings.nativeVersion(
-                  version: ref.watch(nativeServiceProvider).version,
-                ),
-                style: theme.typography.body.copyWith(
-                  color: theme.colors.text2,
+            if (nativeVersion != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  t.settings.nativeVersion(version: nativeVersion),
+                  style: theme.typography.body.copyWith(
+                    color: theme.colors.text2,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ],

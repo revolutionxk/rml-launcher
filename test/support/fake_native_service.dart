@@ -2,10 +2,10 @@ import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/core/result/result.dart';
 
 final class FakeNativeService implements NativeService {
-  FakeNativeService({this.osReducesMotion});
+  FakeNativeService({this.osReducesMotion, this.version = '0.1.0'});
 
   @override
-  String get version => '0.1.0';
+  final String? version;
 
   @override
   bool? osReducesMotion;

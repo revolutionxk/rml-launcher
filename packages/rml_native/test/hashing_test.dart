@@ -59,4 +59,19 @@ void main() {
       ),
     );
   });
+
+  test('a directory fails with an io error', () async {
+    final Directory dir = await Directory.systemTemp.createTemp('rml native');
+    addTearDown(() => dir.delete(recursive: true));
+    await expectLater(
+      hashFile(HashAlgorithm.md5, dir.path),
+      throwsA(
+        isA<RmlNativeException>().having(
+          (RmlNativeException error) => error.code,
+          'code',
+          2,
+        ),
+      ),
+    );
+  });
 }

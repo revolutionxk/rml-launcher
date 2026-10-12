@@ -5,7 +5,7 @@ import 'package:rml_native/rml_native.dart' as rml;
 export 'package:rml_native/rml_native.dart' show HashAlgorithm;
 
 abstract interface class NativeService {
-  String get version;
+  String? get version;
 
   bool? get osReducesMotion;
 
@@ -16,7 +16,13 @@ final class RmlNativeService implements NativeService {
   const RmlNativeService();
 
   @override
-  String get version => rml.nativeVersion();
+  String? get version {
+    try {
+      return rml.nativeVersion();
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   bool? get osReducesMotion {
@@ -42,6 +48,10 @@ final class RmlNativeService implements NativeService {
           cause: error,
           stackTrace: stackTrace,
         ),
+      );
+    } catch (error, stackTrace) {
+      return Result<String>.err(
+        UnknownFailure(cause: error, stackTrace: stackTrace),
       );
     }
   }

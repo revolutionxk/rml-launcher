@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:rml_native/src/bindings.g.dart' as bindings;
 import 'package:rml_native/src/native_exception.dart';
+import 'package:rml_native/src/native_text.dart';
 
 enum HashAlgorithm {
   md5(0, 32),
@@ -42,30 +43,43 @@ Future<String> hashFile(HashAlgorithm algorithm, String path) {
     int status,
     Pointer<Char> text,
   ) {
-    final String message = text == nullptr
-        ? ''
-        : text.cast<Utf8>().toDartString();
-    bindings.rml_free(text.cast());
-    callable.close();
-    if (status == 0) {
-      completer.complete(message);
-    } else {
-      completer.completeError(RmlNativeException(status, message));
+    try {
+      completer.complete(_hashResult(status, text));
+    } catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+    } finally {
+      bindings.rml_free(text.cast());
+      callable.close();
     }
   });
   final Pointer<Utf8> nativePath = path.toNativeUtf8();
+  final int status;
   try {
-    final int status = bindings.rml_hash_file_async(
+    status = bindings.rml_hash_file_async(
       algorithm.code,
       nativePath.cast(),
       callable.nativeFunction,
     );
-    if (status != 0) {
-      callable.close();
-      completer.completeError(RmlNativeException.last(status));
-    }
+  } catch (_) {
+    callable.close();
+    rethrow;
   } finally {
     malloc.free(nativePath);
   }
+  if (status != 0) {
+    callable.close();
+    completer.completeError(RmlNativeException.last(status));
+  }
   return completer.future;
+}
+
+String _hashResult(int status, Pointer<Char> text) {
+  final String? message = text == nullptr ? null : readNativeText(text);
+  if (status != 0) {
+    throw RmlNativeException(status, message ?? '');
+  }
+  if (message == null) {
+    throw const RmlNativeException(3, 'No result');
+  }
+  return message;
 }

@@ -8,18 +8,24 @@ import 'package:rml_launcher/design/tokens/rml_colors.dart';
 import 'package:rml_launcher/features/shell/view/app_shell.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 
+import '../../support/fake_native_service.dart';
 import '../../support/test_dependencies.dart';
 
 void main() {
   tearDown(() => LocaleSettings.setLocale(AppLocale.en));
 
-  Future<void> openSettings(WidgetTester tester) async {
+  Future<void> openSettings(
+    WidgetTester tester, {
+    FakeNativeService? native,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(1180, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          appDependenciesProvider.overrideWithValue(testDependencies()),
+          appDependenciesProvider.overrideWithValue(
+            testDependencies(native: native),
+          ),
         ],
         child: TranslationProvider(child: const RmlApp()),
       ),
@@ -59,5 +65,12 @@ void main() {
   testWidgets('shows the native library version', (WidgetTester tester) async {
     await openSettings(tester);
     expect(find.text('Native library 0.1.0'), findsOneWidget);
+  });
+
+  testWidgets('hides the native library version when it cannot be read', (
+    WidgetTester tester,
+  ) async {
+    await openSettings(tester, native: FakeNativeService(version: null));
+    expect(find.textContaining('Native library'), findsNothing);
   });
 }

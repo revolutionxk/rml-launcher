@@ -61,6 +61,15 @@ TEST_CASE("a missing file is an io error") {
   CHECK(rml_hash_file(RML_HASH_SHA256, "/definitely/missing/rml.bin", out, sizeof(out)) == RML_ERR_IO);
 }
 
+TEST_CASE("a directory is not hashed") {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "rml native dir";
+  std::filesystem::create_directories(dir);
+  char out[65] = {};
+  CHECK(rml_hash_file(RML_HASH_SHA256, utf8(dir).c_str(), out, sizeof(out)) == RML_ERR_IO);
+  CHECK(std::string(rml_last_error()).find("Not a file") != std::string::npos);
+  std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("files with non-ascii paths hash correctly") {
   const std::filesystem::path dir = std::filesystem::temp_directory_path() / std::filesystem::path(u8"rml native Ação ✓");
   const std::filesystem::path file = write_file(dir / std::filesystem::path(u8"mods ção.bin"), "abc");
