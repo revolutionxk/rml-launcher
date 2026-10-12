@@ -72,26 +72,32 @@ final class VinegarDiscovery implements DiscoveryProvider {
   };
 
   @override
-  Future<List<DiscoveredInstall>> scan() async {
+  Future<DiscoveryScan> scan() async {
     final VinegarKind? kind = await _locator.detect();
     final String? data = kind == null ? null : _locator.dataDir(kind);
     if (data == null) {
-      return const <DiscoveredInstall>[];
+      return const DiscoveryScan();
     }
-    final File? executable = newestStudioExecutable(p.join(data, 'versions'));
-    final StudioBuild? build = executable == null
-        ? null
-        : buildFromVersionFolder(executable, _native);
+    final String id = foundInstallId(InstallSource.vinegar, data);
+    final VersionsScan result = scanVersionsRoot(
+      p.join(data, 'versions'),
+      _native,
+    );
+    final StudioBuild? build = result.build;
     if (build == null) {
-      return const <DiscoveredInstall>[];
+      return DiscoveryScan(
+        unreadable: result.unreadable ? <String>{id} : const <String>{},
+      );
     }
-    return <DiscoveredInstall>[
-      DiscoveredInstall(
-        id: foundInstallId(InstallSource.vinegar, data),
-        source: InstallSource.vinegar,
-        name: 'Vinegar',
-        build: build,
-      ),
-    ];
+    return DiscoveryScan(
+      found: <DiscoveredInstall>[
+        DiscoveredInstall(
+          id: id,
+          source: InstallSource.vinegar,
+          name: 'Vinegar',
+          build: build,
+        ),
+      ],
+    );
   }
 }

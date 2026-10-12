@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:path/path.dart' as p;
 import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
@@ -23,10 +21,32 @@ final class WindowsDiscovery implements DiscoveryProvider {
   };
 
   @override
-  Future<List<DiscoveredInstall>> scan() async => <DiscoveredInstall>[
-    for (final _Root root in _roots())
-      if (_scan(root) case final DiscoveredInstall install) install,
-  ];
+  Future<DiscoveryScan> scan() async {
+    final List<DiscoveredInstall> found = <DiscoveredInstall>[];
+    final Set<String> unreadable = <String>{};
+    for (final _Root root in _roots()) {
+      final String id = foundInstallId(
+        root.source,
+        root.path,
+        ignoreCase: true,
+      );
+      final VersionsScan result = scanVersionsRoot(root.path, _native);
+      final StudioBuild? build = result.build;
+      if (build != null) {
+        found.add(
+          DiscoveredInstall(
+            id: id,
+            source: root.source,
+            name: root.name,
+            build: build,
+          ),
+        );
+      } else if (result.unreadable) {
+        unreadable.add(id);
+      }
+    }
+    return DiscoveryScan(found: found, unreadable: unreadable);
+  }
 
   List<_Root> _roots() {
     final String? local = _environment['LOCALAPPDATA'];
@@ -42,7 +62,7 @@ final class WindowsDiscovery implements DiscoveryProvider {
         (
           path: p.join(programs, 'Roblox', 'Versions'),
           source: InstallSource.roblox,
-          name: 'Roblox',
+          name: 'Roblox (all users)',
         ),
       if (local != null)
         (
@@ -51,21 +71,5 @@ final class WindowsDiscovery implements DiscoveryProvider {
           name: 'Bloxstrap',
         ),
     ];
-  }
-
-  DiscoveredInstall? _scan(_Root root) {
-    final File? executable = newestStudioExecutable(root.path);
-    final StudioBuild? build = executable == null
-        ? null
-        : buildFromVersionFolder(executable, _native);
-    if (build == null) {
-      return null;
-    }
-    return DiscoveredInstall(
-      id: foundInstallId(root.source, root.path, ignoreCase: true),
-      source: root.source,
-      name: root.name,
-      build: build,
-    );
   }
 }

@@ -15,8 +15,18 @@ final class DiscoveredInstall {
   final StudioBuild build;
 }
 
+final class DiscoveryScan {
+  const DiscoveryScan({
+    this.found = const <DiscoveredInstall>[],
+    this.unreadable = const <String>{},
+  });
+
+  final List<DiscoveredInstall> found;
+  final Set<String> unreadable;
+}
+
 abstract interface class DiscoveryProvider {
   Set<InstallSource> get sources;
 
-  Future<List<DiscoveredInstall>> scan();
+  Future<DiscoveryScan> scan();
 }

@@ -19,15 +19,16 @@ final class FakeProvider implements DiscoveryProvider {
   final Set<InstallSource> sources;
 
   List<DiscoveredInstall> installs = <DiscoveredInstall>[];
+  Set<String> unreadable = <String>{};
   StateError? error;
 
   @override
-  Future<List<DiscoveredInstall>> scan() async {
+  Future<DiscoveryScan> scan() async {
     final StateError? failure = error;
     if (failure != null) {
       throw failure;
     }
-    return installs;
+    return DiscoveryScan(found: installs, unreadable: unreadable);
   }
 }
 
@@ -112,6 +113,45 @@ void main() {
     windows.error = StateError('registry exploded');
     await discovery.refresh();
     expect(library().byId('bloxstrap-1'), isNotNull);
+  });
+
+  test('an unreadable install is neither removed nor changed', () async {
+    windows.installs = <DiscoveredInstall>[bloxstrap('version-a')];
+    await discovery.refresh();
+    windows
+      ..installs = <DiscoveredInstall>[]
+      ..unreadable = <String>{'bloxstrap-1'};
+    await discovery.refresh();
+    windows
+      ..installs = <DiscoveredInstall>[bloxstrap('version-b')]
+      ..unreadable = <String>{'bloxstrap-1'};
+    await discovery.refresh();
+    expect(
+      library().byId('bloxstrap-1')!.current!.path,
+      '/b/Versions/version-a',
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(harness.seen.whereType<InstallRemoved>(), isEmpty);
+    expect(harness.seen.whereType<FoundBuildChanged>(), isEmpty);
+  });
+
+  test('overlapping refreshes share one scan', () async {
+    windows.installs = <DiscoveredInstall>[bloxstrap('version-a')];
+    final Future<void> first = discovery.refresh();
+    final Future<void> second = discovery.refresh();
+    expect(identical(first, second), isTrue);
+    await first;
+  });
+
+  test('an unreachable studio root clears nothing', () async {
+    final StudioBuild good = await harness.makeBuild('main', '0.690.0.1');
+    await harness.library.update(
+      (StudioLibrary current) =>
+          current.upsert(managedInstall('main', current: good)),
+    );
+    Directory(harness.layout.root).deleteSync(recursive: true);
+    await discovery.refresh();
+    expect(library().byId('main')!.current, good);
   });
 
   test('a managed build without its marker is cleared', () async {

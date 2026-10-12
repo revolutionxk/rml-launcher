@@ -1,5 +1,7 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:rml_launcher/design/identity/identity_color.dart';
 import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
 import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
@@ -23,9 +25,18 @@ final class DiscoveryService {
   final StudioLayout _layout;
   final StudioEvents _events;
 
-  Future<void> refresh() async {
-    final (List<DiscoveredInstall> found, Set<InstallSource> scanned) =
-        await _scanAll();
+  Future<void>? _inFlight;
+
+  Future<void> refresh() => _inFlight ??= _refresh().whenComplete(() {
+    _inFlight = null;
+  });
+
+  Future<void> _refresh() async {
+    final (
+      List<DiscoveredInstall> found,
+      Set<InstallSource> scanned,
+      Set<String> unreadable,
+    ) = await _scanAll();
     final Set<String> missing = _missingBuildPaths();
     final List<StudioEvent> pending = <StudioEvent>[];
     await _library.update((StudioLibrary library) {
@@ -36,6 +47,9 @@ final class DiscoveryService {
         }
       }
       for (final DiscoveredInstall discovered in found) {
+        if (unreadable.contains(discovered.id)) {
+          continue;
+        }
         final StudioInstall? existing = next.byId(discovered.id);
         if (existing == null) {
           next = next.upsert(_newInstall(discovered));
@@ -63,7 +77,8 @@ final class DiscoveryService {
       for (final StudioInstall install in library.installs) {
         if (install.kind != InstallKind.found ||
             !scanned.contains(install.source) ||
-            foundIds.contains(install.id)) {
+            foundIds.contains(install.id) ||
+            unreadable.contains(install.id)) {
           continue;
         }
         final bool hidden = next.hiddenFoundIds.contains(install.id);
@@ -78,28 +93,31 @@ final class DiscoveryService {
     pending.forEach(_events.emit);
   }
 
-  Future<(List<DiscoveredInstall>, Set<InstallSource>)> _scanAll() async {
-    final List<(DiscoveryProvider, List<DiscoveredInstall>?)> results =
-        await Future.wait(_providers.map(_safeScan));
+  Future<(List<DiscoveredInstall>, Set<InstallSource>, Set<String>)>
+  _scanAll() async {
+    final List<(DiscoveryProvider, DiscoveryScan?)> results = await Future.wait(
+      _providers.map(_safeScan),
+    );
     final List<DiscoveredInstall> found = <DiscoveredInstall>[];
     final Set<InstallSource> scanned = <InstallSource>{};
+    final Set<String> unreadable = <String>{};
     final Set<String> ids = <String>{};
-    for (final (DiscoveryProvider provider, List<DiscoveredInstall>? installs)
-        in results) {
-      if (installs == null) {
+    for (final (DiscoveryProvider provider, DiscoveryScan? scan) in results) {
+      if (scan == null) {
         continue;
       }
       scanned.addAll(provider.sources);
-      for (final DiscoveredInstall install in installs) {
+      unreadable.addAll(scan.unreadable);
+      for (final DiscoveredInstall install in scan.found) {
         if (ids.add(install.id)) {
           found.add(install);
         }
       }
     }
-    return (found, scanned);
+    return (found, scanned, unreadable);
   }
 
-  Future<(DiscoveryProvider, List<DiscoveredInstall>?)> _safeScan(
+  Future<(DiscoveryProvider, DiscoveryScan?)> _safeScan(
     DiscoveryProvider provider,
   ) async {
     try {
@@ -115,12 +133,22 @@ final class DiscoveryService {
     }
   }
 
-  Set<String> _missingBuildPaths() => <String>{
-    for (final StudioInstall install in _library.value.installs)
-      if (install.isManaged)
-        for (final StudioBuild build in install.builds)
-          if (!BuildMarker.existsIn(_layout.buildDirOf(build))) build.path,
-  };
+  Set<String> _missingBuildPaths() {
+    if (!Directory(_layout.root).existsSync()) {
+      return const <String>{};
+    }
+    return <String>{
+      for (final StudioInstall install in _library.value.installs)
+        if (install.isManaged)
+          for (final StudioBuild build in install.builds)
+            if (_markerLost(build)) build.path,
+    };
+  }
+
+  bool _markerLost(StudioBuild build) {
+    final String dir = _layout.buildDirOf(build);
+    return Directory(p.dirname(dir)).existsSync() && !BuildMarker.existsIn(dir);
+  }
 
   static bool Function(StudioBuild build) _inSet(Set<String> paths) =>
       (StudioBuild build) => paths.contains(build.path);

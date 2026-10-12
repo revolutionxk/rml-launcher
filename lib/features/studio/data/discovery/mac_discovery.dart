@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/features/studio/data/discovery/discovery_provider.dart';
+import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
 import 'package:rml_launcher/features/studio/data/process/process_starter.dart';
 import 'package:rml_launcher/features/studio/domain/install_ids.dart';
 import 'package:rml_launcher/features/studio/domain/studio_build.dart';
@@ -50,7 +51,7 @@ final class MacDiscovery implements DiscoveryProvider {
   };
 
   @override
-  Future<List<DiscoveredInstall>> scan() async {
+  Future<DiscoveryScan> scan() async {
     final List<String> candidates = <String>[
       ..._searchPaths,
       if (_useSpotlight) ...await _spotlight(),
@@ -59,7 +60,9 @@ final class MacDiscovery implements DiscoveryProvider {
     final List<DiscoveredInstall> found = <DiscoveredInstall>[];
     for (final String candidate in candidates) {
       final String bundle = p.normalize(candidate);
-      if (!seen.add(bundle) || p.isWithin(_studioRoot, bundle)) {
+      if (!seen.add(bundle) ||
+          p.isWithin(_studioRoot, bundle) ||
+          BuildMarker.existsIn(p.dirname(bundle))) {
         continue;
       }
       final StudioBuild? build = _read(bundle);
@@ -74,7 +77,7 @@ final class MacDiscovery implements DiscoveryProvider {
         );
       }
     }
-    return found;
+    return DiscoveryScan(found: found);
   }
 
   Future<List<String>> _spotlight() async {

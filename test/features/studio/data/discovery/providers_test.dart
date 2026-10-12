@@ -60,7 +60,7 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('player');
       studioExe('Local/Bloxstrap/Versions/version-b');
-      final List<DiscoveredInstall> found = await discovery().scan();
+      final List<DiscoveredInstall> found = (await discovery().scan()).found;
       expect(found.map((DiscoveredInstall i) => i.source), <InstallSource>[
         InstallSource.roblox,
         InstallSource.bloxstrap,
@@ -71,23 +71,49 @@ void main() {
       expect(roblox.build.version.text, '0.690.0.6900613');
       expect(roblox.name, 'Roblox');
       expect(roblox.id, startsWith('roblox-'));
-      expect((await discovery().scan()).first.id, roblox.id);
+      expect((await discovery().scan()).found.first.id, roblox.id);
     });
 
-    test('roots that are missing or unreadable give nothing', () async {
-      expect(await discovery(programFiles: true).scan(), isEmpty);
+    test('missing roots give nothing and unreadable ones are named', () async {
+      expect((await discovery(programFiles: true).scan()).found, isEmpty);
       File(path('Local/Roblox/Versions/version-x/RobloxStudioBeta.exe'))
         ..createSync(recursive: true)
         ..writeAsStringSync('no version');
-      expect(await discovery().scan(), isEmpty);
+      final DiscoveryScan scan = await discovery().scan();
+      expect(scan.found, isEmpty);
+      expect(scan.unreadable, hasLength(1));
+      expect(scan.unreadable.single, startsWith('roblox-'));
+    });
+
+    test('an unreadable newest folder falls back to an older one', () async {
+      studioExe('Local/Roblox/Versions/version-old', at: DateTime(2026, 1, 1));
+      File(path('Local/Roblox/Versions/version-new/RobloxStudioBeta.exe'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('locked')
+        ..setLastModifiedSync(DateTime(2026, 9, 1));
+      final DiscoveryScan scan = await discovery().scan();
+      expect(scan.found.single.build.guid, 'version-old');
+      expect(scan.unreadable, isEmpty);
+    });
+
+    test('one unreadable root leaves the other roots alone', () async {
+      File(path('Local/Roblox/Versions/version-x/RobloxStudioBeta.exe'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('locked');
+      studioExe('Local/Bloxstrap/Versions/version-b');
+      final DiscoveryScan scan = await discovery().scan();
+      expect(scan.found.single.source, InstallSource.bloxstrap);
+      expect(scan.unreadable, hasLength(1));
     });
 
     test('the all-users root is a separate install', () async {
       studioExe('Local/Roblox/Versions/version-a');
       studioExe('Program Files (x86)/Roblox/Versions/version-a');
-      final List<DiscoveredInstall> found = await discovery(programFiles: true)
-          .scan();
+      final List<DiscoveredInstall> found = (await discovery(
+        programFiles: true,
+      ).scan()).found;
       expect(found, hasLength(2));
+      expect(found[1].name, 'Roblox (all users)');
       expect(found[0].id, isNot(found[1].id));
     });
   });
@@ -127,10 +153,10 @@ void main() {
       final String managed = bundle('Studio/main/builds/1/RobloxStudio.app');
       processes.outputs['mdfind ${MacDiscovery.spotlightQuery}'] =
           ProcessOutput(exitCode: 0, stdout: '$spotted\n$managed\n$fixed\n');
-      final List<DiscoveredInstall> found = await discovery(<String>[
+      final List<DiscoveredInstall> found = (await discovery(<String>[
         fixed,
         path('home/Applications/RobloxStudio.app'),
-      ]).scan();
+      ]).scan()).found;
       expect(found.map((DiscoveredInstall i) => i.build.path), <String>[
         fixed,
         spotted,
@@ -140,13 +166,20 @@ void main() {
       expect(found.first.id, startsWith('mac-'));
     });
 
+    test('bundles next to a build marker are skipped', () async {
+      final String managed = bundle('Linked/main/builds/2/RobloxStudio.app');
+      File(p.join(p.dirname(managed), 'rml-build.json'))
+          .writeAsStringSync('{}');
+      expect((await discovery(<String>[managed]).scan()).found, isEmpty);
+    });
+
     test('other apps and bundles without an executable are skipped', () async {
       final String handler = bundle(
         'Applications/Handler.app',
         identifier: 'com.Roblox.StudioProtocolHandler',
       );
       final String empty = bundle('Applications/Empty.app', executable: false);
-      expect(await discovery(<String>[handler, empty]).scan(), isEmpty);
+      expect((await discovery(<String>[handler, empty]).scan()).found, isEmpty);
     });
   });
 
@@ -163,10 +196,10 @@ void main() {
         processes: processes,
       );
       expect(await locator.detect(), VinegarKind.binary);
-      final List<DiscoveredInstall> found = await VinegarDiscovery(
+      final List<DiscoveredInstall> found = (await VinegarDiscovery(
         locator: locator,
         native: native,
-      ).scan();
+      ).scan()).found;
       expect(found.single.source, InstallSource.vinegar);
       expect(found.single.build.path, path('data/vinegar/versions/version-v'));
       expect(found.single.name, 'Vinegar');
@@ -193,7 +226,7 @@ void main() {
       );
       expect(await locator.detect(), isNull);
       expect(
-        await VinegarDiscovery(locator: locator, native: native).scan(),
+        (await VinegarDiscovery(locator: locator, native: native).scan()).found,
         isEmpty,
       );
     });

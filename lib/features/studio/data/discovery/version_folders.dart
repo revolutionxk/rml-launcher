@@ -5,26 +5,38 @@ import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/features/studio/domain/studio_build.dart';
 import 'package:rml_launcher/features/studio/domain/studio_version.dart';
 
-File? newestStudioExecutable(String versionsDir) {
-  final Directory root = Directory(versionsDir);
-  if (!root.existsSync()) {
-    return null;
+typedef VersionsScan = ({StudioBuild? build, bool unreadable});
+
+VersionsScan scanVersionsRoot(String versionsDir, NativeService native) {
+  try {
+    final Directory root = Directory(versionsDir);
+    if (!root.existsSync()) {
+      return (build: null, unreadable: false);
+    }
+    final List<File> executables = <File>[
+      for (final FileSystemEntity entry in root.listSync(followLinks: false))
+        if (entry is Directory)
+          if (File(p.join(entry.path, 'RobloxStudioBeta.exe'))
+              case final File exe when exe.existsSync())
+            exe,
+    ];
+    if (executables.isEmpty) {
+      return (build: null, unreadable: false);
+    }
+    final Map<File, DateTime> modified = <File, DateTime>{
+      for (final File exe in executables) exe: exe.lastModifiedSync(),
+    };
+    executables.sort((File a, File b) => modified[b]!.compareTo(modified[a]!));
+    for (final File exe in executables) {
+      final StudioBuild? build = buildFromVersionFolder(exe, native);
+      if (build != null) {
+        return (build: build, unreadable: false);
+      }
+    }
+    return (build: null, unreadable: true);
+  } on FileSystemException {
+    return (build: null, unreadable: true);
   }
-  File? newest;
-  for (final FileSystemEntity entry in root.listSync(followLinks: false)) {
-    if (entry is! Directory) {
-      continue;
-    }
-    final File exe = File(p.join(entry.path, 'RobloxStudioBeta.exe'));
-    if (!exe.existsSync()) {
-      continue;
-    }
-    if (newest == null ||
-        exe.lastModifiedSync().isAfter(newest.lastModifiedSync())) {
-      newest = exe;
-    }
-  }
-  return newest;
 }
 
 StudioBuild? buildFromVersionFolder(File executable, NativeService native) {
