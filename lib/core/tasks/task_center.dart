@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:rml_launcher/core/async/abort_signal.dart';
 import 'package:rml_launcher/core/result/app_failure.dart';
@@ -105,9 +106,7 @@ final class TaskCenter {
   final List<StudioTask> _finished;
   final ValueHub<List<StudioTask>> _tasks;
   final Map<String, _Running> _running = <String, _Running>{};
-  final Map<String, Future<Result<Object?>> Function()> _retryable =
-      <String, Future<Result<Object?>> Function()>{};
-  final Map<String, String> _retryOwner = <String, String>{};
+  final Map<String, _Running> _retryable = <String, _Running>{};
   int _counter = 0;
 
   List<StudioTask> get tasks => _tasks.value;
@@ -181,21 +180,26 @@ final class TaskCenter {
     running.release(resume: false);
   }
 
+  bool canRetry(String taskId) => _retryable.containsKey(taskId);
+
   Future<Result<Object?>>? retry(String taskId) {
-    _retryOwner.remove(taskId);
-    return _retryable.remove(taskId)?.call();
+    final _Running? failed = _retryable[taskId];
+    if (failed == null) {
+      return null;
+    }
+    final TaskRequest request = failed.request;
+    if (request.exclusive && isBusy(request.installId)) {
+      return Future<Result<Object?>>.value(
+        Result<Object?>.err(TaskBusyFailure(installId: request.installId)),
+      );
+    }
+    _retryable.remove(taskId);
+    return failed.rerun();
   }
 
-  void forgetRetries(String installId) {
-    final List<String> stale = _retryOwner.entries
-        .where((MapEntry<String, String> entry) => entry.value == installId)
-        .map((MapEntry<String, String> entry) => entry.key)
-        .toList();
-    for (final String taskId in stale) {
-      _retryOwner.remove(taskId);
-      _retryable.remove(taskId);
-    }
-  }
+  void forgetRetries(String installId) => _retryable.removeWhere(
+    (String _, _Running failed) => failed.request.installId == installId,
+  );
 
   Future<Result<T>> _drive<T>(
     _Running running,
@@ -227,7 +231,7 @@ final class TaskCenter {
         }
       }
       if (running.cancelled) {
-        await onCancel?.call();
+        await _cleanUp(onCancel);
         await _finish(running, TaskState.cancelled, const CancelledFailure());
         return Result<T>.err(const CancelledFailure());
       }
@@ -242,6 +246,19 @@ final class TaskCenter {
     } catch (error, stackTrace) {
       return Result<T>.err(
         UnknownFailure(cause: error, stackTrace: stackTrace),
+      );
+    }
+  }
+
+  Future<void> _cleanUp(Future<void> Function()? onCancel) async {
+    try {
+      await onCancel?.call();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Task clean-up after a cancel failed',
+        name: 'rml.tasks',
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
@@ -261,8 +278,7 @@ final class TaskCenter {
       eta: null,
     );
     if (state == TaskState.failed) {
-      _retryable[finished.id] = running.rerun;
-      _retryOwner[finished.id] = running.request.installId;
+      _retryable[finished.id] = running;
     }
     if (finished.kind.recorded) {
       _finished.insert(0, finished);

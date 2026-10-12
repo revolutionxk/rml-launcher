@@ -17,7 +17,10 @@ import 'package:rml_launcher/features/studio/data/studio_layout.dart';
 final RegExp _md5 = RegExp(r'^[0-9a-f]{32}$');
 
 String? md5FromEtag(String? etag) {
-  if (etag == null || !etag.startsWith('"') || !etag.endsWith('"')) {
+  if (etag == null ||
+      etag.length < 2 ||
+      !etag.startsWith('"') ||
+      !etag.endsWith('"')) {
     return null;
   }
   final String bare = etag.substring(1, etag.length - 1).toLowerCase();

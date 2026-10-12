@@ -21,6 +21,7 @@ final class FakeNativeService implements NativeService {
   final bool realFiles;
   int freeBytes;
   List<NativeProcess> processes = <NativeProcess>[];
+  AppFailure? processFailure;
   final Map<String, ExecutableInfo> executables = <String, ExecutableInfo>{};
   final List<int> closed = <int>[];
   final List<int> killed = <int>[];
@@ -46,8 +47,12 @@ final class FakeNativeService implements NativeService {
   Result<int> diskFree(String path) => Result<int>.ok(freeBytes);
 
   @override
-  Result<List<NativeProcess>> findProcesses(String executableName) =>
-      Result<List<NativeProcess>>.ok(List<NativeProcess>.of(processes));
+  Result<List<NativeProcess>> findProcesses(String executableName) {
+    final AppFailure? failure = processFailure;
+    return failure == null
+        ? Result<List<NativeProcess>>.ok(List<NativeProcess>.of(processes))
+        : Result<List<NativeProcess>>.err(failure);
+  }
 
   @override
   Result<void> closeProcess(int pid) {

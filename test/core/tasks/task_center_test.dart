@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/core/result/app_failure.dart';
@@ -174,6 +175,67 @@ void main() {
     expect(retried.isOk, isTrue);
     expect(runs, 2);
     expect(center.retry(failed), isNull);
+  });
+
+  test('only a failed task can be retried', () async {
+    await center.run<void>(
+      install('done'),
+      (TaskControl control) async => const Result<void>.ok(null),
+    );
+    await center.run<void>(
+      install('main'),
+      (TaskControl control) async => const Result<void>.err(NetworkFailure()),
+    );
+    final StudioTask failed = center.tasks.firstWhere(
+      (StudioTask task) => task.installId == 'main',
+    );
+    final StudioTask done = center.tasks.firstWhere(
+      (StudioTask task) => task.installId == 'done',
+    );
+    expect(center.canRetry(failed.id), isTrue);
+    expect(center.canRetry(done.id), isFalse);
+    await center.retry(failed.id);
+    expect(center.canRetry(failed.id), isFalse);
+  });
+
+  test('a retry while the install is busy stays retryable', () async {
+    int runs = 0;
+    await center.run<void>(install('main'), (TaskControl control) async {
+      runs++;
+      return runs == 1
+          ? const Result<void>.err(NetworkFailure())
+          : const Result<void>.ok(null);
+    });
+    final String failed = center.tasks.single.id;
+    final Completer<void> open = Completer<void>();
+    final Future<Result<void>> busy = center.run<void>(install('main'), (
+      TaskControl control,
+    ) async {
+      await open.future;
+      return const Result<void>.ok(null);
+    });
+    final Result<Object?> refused = await center.retry(failed)!;
+    expect(refused.failureOrNull, isA<TaskBusyFailure>());
+    expect(runs, 1);
+    expect(center.canRetry(failed), isTrue);
+    open.complete();
+    await busy;
+    expect((await center.retry(failed)!).isOk, isTrue);
+    expect(runs, 2);
+  });
+
+  test('a cancel clean-up that throws still ends the task', () async {
+    final Future<Result<void>> running = center.run<void>(install('main'), (
+      TaskControl control,
+    ) async {
+      await control.abort.whenAborted;
+      return const Result<void>.err(CancelledFailure());
+    }, onCancel: () async => throw const FileSystemException('locked'));
+    await settle();
+    center.cancel(center.tasks.single.id);
+    expect((await running).failureOrNull, isA<CancelledFailure>());
+    expect(center.tasks.single.state, TaskState.cancelled);
+    expect(center.isBusy('main'), isFalse);
   });
 
   test('forgetting an install drops its retries', () async {

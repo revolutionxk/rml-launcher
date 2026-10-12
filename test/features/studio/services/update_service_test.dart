@@ -20,6 +20,7 @@ import 'package:rml_launcher/features/studio/services/update_service.dart';
 
 import '../../../support/memory_json_store.dart';
 import '../../../support/service_harness.dart';
+import '../../../support/studio_fixtures.dart';
 import '../../../support/studio_library_fixtures.dart';
 
 void main() {
@@ -212,18 +213,23 @@ void main() {
     },
   );
 
-  test('switching to follow live checks at once', () async {
+  test('switching to follow live checks at once in the background', () async {
     await harness.library.update(
       (StudioLibrary library) =>
           library.upsert(main().copyWith(policy: UpdatePolicy.pinned)),
     );
     live('0.691.0.1');
+    harness.installer.gate = Completer<void>();
     final Result<void> result = await updates.setPolicy(
       'main',
       UpdatePolicy.followLive,
     );
     expect(result.isOk, isTrue);
     expect(main().policy, UpdatePolicy.followLive);
+    await until(() => harness.tasks.isBusy('main'));
+    expect(main().ready, isNull);
+    harness.installer.gate!.complete();
+    await until(() => main().ready != null);
     expect(main().ready!.version.text, '0.691.0.1');
   });
 

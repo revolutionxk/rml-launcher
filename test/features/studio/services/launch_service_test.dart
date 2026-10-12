@@ -105,6 +105,53 @@ void main() {
     ]);
   });
 
+  test('macos refuses a managed bundle without its executable', () async {
+    await start(HostOs.macos);
+    File(harness.layout.studioExecutable(build)).deleteSync();
+    final Result<void> result = await launcher.launch('main');
+    expect(
+      result.failureOrNull,
+      isA<NotFoundFailure>().having(
+        (NotFoundFailure failure) => failure.what,
+        'what',
+        'Studio',
+      ),
+    );
+    expect(processes.started, isEmpty);
+    expect(harness.library.value.byId('main')!.lastLaunchedAt, isNull);
+  });
+
+  test(
+    'macos opens a found bundle only when it has something to run',
+    () async {
+      await start(HostOs.macos);
+      final String bundle = p.join(
+        harness.dir.path,
+        'Apps',
+        'RobloxStudio.app',
+      );
+      final Directory binaries = Directory(p.join(bundle, 'Contents', 'MacOS'))
+        ..createSync(recursive: true);
+      await harness.library.update(
+        (StudioLibrary library) => library.upsert(
+          foundInstall(
+            'mac-1',
+            InstallSource.macBundle,
+            current: buildAt(bundle),
+          ),
+        ),
+      );
+      expect(
+        (await launcher.launch('mac-1')).failureOrNull,
+        isA<NotFoundFailure>(),
+      );
+      expect(processes.started, isEmpty);
+      File(p.join(binaries.path, 'RobloxStudio')).writeAsStringSync('bin');
+      expect((await launcher.launch('mac-1')).isOk, isTrue);
+      expect(started().arguments, <String>['-n', '-a', bundle]);
+    },
+  );
+
   test('linux goes through the vinegar binary or the flatpak', () async {
     final Directory bin = await Directory.systemTemp.createTemp('rml bin ');
     addTearDown(() => bin.delete(recursive: true));

@@ -59,12 +59,20 @@ final class RunningWatcher {
     }
   }
 
-  List<RunningStudio> poll() {
+  List<RunningStudio> poll() => _refresh() ?? running;
+
+  bool isRunning(String installId) =>
+      _refresh()?.any(
+        (RunningStudio studio) => studio.installId == installId,
+      ) ??
+      true;
+
+  List<RunningStudio>? _refresh() {
     final List<NativeProcess>? found = _native
         .findProcesses(executableFor(_os))
         .valueOrNull;
     if (found == null) {
-      return running;
+      return null;
     }
     final Map<int, RunningStudio> before = <int, RunningStudio>{
       for (final RunningStudio studio in running) studio.pid: studio,
@@ -96,9 +104,6 @@ final class RunningWatcher {
     }
     return next;
   }
-
-  bool isRunning(String installId) =>
-      poll().any((RunningStudio studio) => studio.installId == installId);
 
   Result<void> close(int pid) => _native.closeProcess(pid);
 

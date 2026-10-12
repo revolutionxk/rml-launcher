@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/core/storage/file_ops.dart';
@@ -233,7 +235,7 @@ final class UpdateService {
       return Result<void>.err(failure);
     }
     if (policy == UpdatePolicy.followLive) {
-      await checkForUpdates();
+      unawaited(checkForUpdates());
     }
     return const Result<void>.ok(null);
   }

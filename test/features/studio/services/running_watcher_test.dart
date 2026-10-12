@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/core/native/native_service.dart';
 import 'package:rml_launcher/core/platform/app_paths.dart';
+import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/features/studio/data/library_store.dart';
 import 'package:rml_launcher/features/studio/domain/running_studio.dart';
 import 'package:rml_launcher/features/studio/domain/studio_event.dart';
@@ -74,6 +75,21 @@ void main() {
     ]);
     expect(running.isRunning('main'), isTrue);
     expect(running.isRunning('vinegar-1'), isFalse);
+  });
+
+  test('a failed listing counts as running', () async {
+    final RunningWatcher running = await watcher(HostOs.windows);
+    native.processes = const <NativeProcess>[
+      NativeProcess(
+        pid: 3,
+        path: '/r/Versions/version-abc/RobloxStudioBeta.exe',
+      ),
+    ];
+    expect(running.isRunning('main'), isFalse);
+    native.processFailure = const NativeFailure(code: 5, message: 'denied');
+    expect(running.isRunning('main'), isTrue);
+    expect(running.isRunning('vinegar-1'), isTrue);
+    expect(running.poll().single.installId, 'roblox-1');
   });
 
   test('windows paths match without case', () async {

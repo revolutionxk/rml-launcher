@@ -192,6 +192,19 @@ void main() {
     expect(Directory(install.current!.path).existsSync(), isTrue);
   });
 
+  test('uninstall is refused when running studios cannot be listed', () async {
+    await start();
+    await service.create(name: 'Main', look: orange);
+    harness.native.processFailure = const NativeFailure(
+      code: 5,
+      message: 'denied',
+    );
+    final Result<void> result = await service.uninstall('main');
+    expect(result.failureOrNull, isA<StudioRunningFailure>());
+    expect(Directory(harness.layout.installDir('main')).existsSync(), isTrue);
+    expect(harness.library.value.byId('main'), isNotNull);
+  });
+
   test('found installs are hidden, not uninstalled', () async {
     await start(
       installs: <StudioInstall>[

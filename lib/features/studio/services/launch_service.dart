@@ -87,11 +87,16 @@ final class LaunchService {
         if (_blocked(installId)) {
           return Result<void>.err(TaskBusyFailure(installId: installId));
         }
-        final StudioBuild? build = _library.value.byId(installId)?.current;
-        if (build == null) {
+        final StudioInstall? latest = _library.value.byId(installId);
+        final StudioBuild? build = latest?.current;
+        if (latest == null || build == null) {
           return const Result<void>.err(NotFoundFailure(what: 'Studio'));
         }
-        final Result<void> started = await _start(build, uri);
+        final Result<void> started = await _start(
+          build,
+          uri,
+          managed: latest.isManaged,
+        );
         if (started.isOk) {
           await _library.update((StudioLibrary library) {
             final StudioInstall? current = library.byId(installId);
@@ -108,7 +113,11 @@ final class LaunchService {
   bool _blocked(String installId) =>
       _blocking.contains(_tasks.activeFor(installId)?.kind);
 
-  Future<Result<void>> _start(StudioBuild build, String? uri) async {
+  Future<Result<void>> _start(
+    StudioBuild build,
+    String? uri, {
+    required bool managed,
+  }) async {
     final List<String> link = <String>[?uri];
     switch (_layout.os) {
       case HostOs.windows:
@@ -125,7 +134,7 @@ final class LaunchService {
           workingDirectory: build.path,
         );
       case HostOs.macos:
-        if (!Directory(build.path).existsSync()) {
+        if (!_bundleRunnable(build, managed: managed)) {
           return const Result<void>.err(NotFoundFailure(what: 'Studio'));
         }
         return _processes.startDetached('open', <String>[
@@ -144,6 +153,18 @@ final class LaunchService {
           ]),
           null => const Result<void>.err(NotFoundFailure(what: 'Vinegar')),
         };
+    }
+  }
+
+  bool _bundleRunnable(StudioBuild build, {required bool managed}) {
+    if (managed) {
+      return File(_layout.studioExecutable(build)).existsSync();
+    }
+    final Directory binaries = Directory(_layout.payloadDir(build));
+    try {
+      return binaries.existsSync() && binaries.listSync().isNotEmpty;
+    } on FileSystemException {
+      return false;
     }
   }
 }

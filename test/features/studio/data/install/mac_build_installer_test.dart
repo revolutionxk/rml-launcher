@@ -121,6 +121,8 @@ void main() {
     );
     expect(md5FromEtag('"abc-3"'), isNull);
     expect(md5FromEtag(null), isNull);
+    expect(md5FromEtag('"'), isNull);
+    expect(md5FromEtag('""'), isNull);
     expect(md5FromEtag('W/"0123456789abcdef0123456789abcdef"'), isNull);
   });
 }
