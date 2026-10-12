@@ -176,6 +176,16 @@ void main() {
     expect(center.retry(failed), isNull);
   });
 
+  test('forgetting an install drops its retries', () async {
+    await center.run<void>(
+      install('main'),
+      (TaskControl control) async => const Result<void>.err(NetworkFailure()),
+    );
+    final String failed = center.tasks.single.id;
+    center.forgetRetries('main');
+    expect(center.retry(failed), isNull);
+  });
+
   test('history keeps the last twenty and survives a restart', () async {
     for (int index = 0; index < 25; index++) {
       await center.run<void>(

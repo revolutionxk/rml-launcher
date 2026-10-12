@@ -107,6 +107,7 @@ final class TaskCenter {
   final Map<String, _Running> _running = <String, _Running>{};
   final Map<String, Future<Result<Object?>> Function()> _retryable =
       <String, Future<Result<Object?>> Function()>{};
+  final Map<String, String> _retryOwner = <String, String>{};
   int _counter = 0;
 
   List<StudioTask> get tasks => _tasks.value;
@@ -180,8 +181,21 @@ final class TaskCenter {
     running.release(resume: false);
   }
 
-  Future<Result<Object?>>? retry(String taskId) =>
-      _retryable.remove(taskId)?.call();
+  Future<Result<Object?>>? retry(String taskId) {
+    _retryOwner.remove(taskId);
+    return _retryable.remove(taskId)?.call();
+  }
+
+  void forgetRetries(String installId) {
+    final List<String> stale = _retryOwner.entries
+        .where((MapEntry<String, String> entry) => entry.value == installId)
+        .map((MapEntry<String, String> entry) => entry.key)
+        .toList();
+    for (final String taskId in stale) {
+      _retryOwner.remove(taskId);
+      _retryable.remove(taskId);
+    }
+  }
 
   Future<Result<T>> _drive<T>(
     _Running running,
@@ -248,6 +262,7 @@ final class TaskCenter {
     );
     if (state == TaskState.failed) {
       _retryable[finished.id] = running.rerun;
+      _retryOwner[finished.id] = running.request.installId;
     }
     if (finished.kind.recorded) {
       _finished.insert(0, finished);

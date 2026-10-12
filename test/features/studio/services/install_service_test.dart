@@ -295,4 +295,27 @@ void main() {
     await pending;
     expect(game.existsSync(), isTrue);
   });
+
+  test('an unreadable root fails the create and adds nothing', () async {
+    await start();
+    final Directory root = Directory(harness.layout.root)
+      ..createSync(recursive: true);
+    Process.runSync('chmod', <String>['000', root.path]);
+    addTearDown(() => Process.runSync('chmod', <String>['755', root.path]));
+    final Result<StudioInstall> result = await service.create(
+      name: 'Main',
+      look: orange,
+    );
+    expect(result.failureOrNull, isA<IoFailure>());
+    expect(harness.library.value.installs, isEmpty);
+  }, skip: Platform.isWindows);
+
+  test('a retry of an uninstalled install cannot be run', () async {
+    await start();
+    harness.installer.failWith = const NetworkFailure();
+    await service.create(name: 'Main', look: orange);
+    final String failed = harness.tasks.tasks.first.id;
+    await service.uninstall('main');
+    expect(harness.tasks.retry(failed), isNull);
+  });
 }
