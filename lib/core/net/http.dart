@@ -44,8 +44,11 @@ Future<Result<RemoteFile>> fetchHead(
 Future<String> _body(HttpClientResponse response, Duration readTimeout) =>
     response.timeout(readTimeout).transform(utf8.decoder).join();
 
-Future<RemoteFile> _head(HttpClientResponse response, Duration _) async {
-  await response.drain<void>();
+Future<RemoteFile> _head(
+  HttpClientResponse response,
+  Duration readTimeout,
+) async {
+  await response.timeout(readTimeout).drain<void>();
   return RemoteFile(
     size: response.contentLength < 0 ? null : response.contentLength,
     etag: response.headers.value(HttpHeaders.etagHeader),
@@ -59,19 +62,23 @@ Future<Result<T>> _send<T>(
   Duration readTimeout,
   Future<T> Function(HttpClientResponse response, Duration readTimeout) read,
 ) async {
+  HttpClientRequest? request;
   try {
-    final HttpClientRequest request = await client.openUrl(method, url);
+    request = await client.openUrl(method, url);
     final HttpClientResponse response = await request.close().timeout(
       readTimeout,
     );
     if (response.statusCode != HttpStatus.ok) {
-      await response.drain<void>();
+      await response.timeout(readTimeout).drain<void>();
       return Result<T>.err(NetworkFailure(statusCode: response.statusCode));
     }
     return Result<T>.ok(await read(response, readTimeout));
   } on TimeoutException catch (error, stackTrace) {
+    request?.abort();
     return Result<T>.err(networkFailureOf(error, stackTrace));
   } on IOException catch (error, stackTrace) {
+    return Result<T>.err(networkFailureOf(error, stackTrace));
+  } on FormatException catch (error, stackTrace) {
     return Result<T>.err(networkFailureOf(error, stackTrace));
   }
 }

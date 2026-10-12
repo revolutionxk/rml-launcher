@@ -234,4 +234,55 @@ void main() {
     expect(result.valueOrNull!.size, 42);
     expect(result.valueOrNull!.etag, '"0123456789abcdef0123456789abcdef"');
   });
+
+  test('a non-200 response whose body stalls times out', () async {
+    server.serveText('setup/DeployHistory.txt', history);
+    for (int attempt = 0; attempt < 5; attempt++) {
+      server.fault('setup/DeployHistory.txt', const StatusStallFault(503));
+    }
+    final Result<List<DeployedBuild>> result = await cdn(CdnPlatform.windows)
+        .deployHistory();
+    expect(
+      result.failureOrNull,
+      isA<NetworkFailure>().having(
+        (NetworkFailure failure) => failure.isTimeout,
+        'timeout',
+        isTrue,
+      ),
+    );
+    expect(server.hits('setup/DeployHistory.txt'), 5);
+  });
+
+  test('a stalled head times out', () async {
+    const String path = 'setup/mac/arm64/version-c-RobloxStudioApp.zip';
+    server.serve(path, List<int>.filled(42, 1));
+    for (int attempt = 0; attempt < 5; attempt++) {
+      server.fault(path, const HeaderStallFault());
+    }
+    final RobloxCdn mac = cdn(CdnPlatform.macArm64);
+    final Result<RemoteFile> result = await mac.head(
+      mac.macAppUrl('version-c'),
+    );
+    expect(
+      result.failureOrNull,
+      isA<NetworkFailure>().having(
+        (NetworkFailure failure) => failure.isTimeout,
+        'timeout',
+        isTrue,
+      ),
+    );
+  });
+
+  test('a malformed body is a network failure', () async {
+    server.serve('setup/DeployHistory.txt', <int>[0xff, 0xfe, 0xfd]);
+    final Result<List<DeployedBuild>> result = await cdn(CdnPlatform.windows)
+        .deployHistory();
+    expect(result.failureOrNull, isA<NetworkFailure>());
+  });
+
+  test('macos surfaces a failed live lookup', () async {
+    final Result<String> result = await cdn(CdnPlatform.macArm64)
+        .resolveGuid(StudioVersion.parse('0.717.0.7170982'));
+    expect(result.failureOrNull, isA<NetworkFailure>());
+  });
 }

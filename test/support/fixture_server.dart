@@ -26,6 +26,16 @@ final class StallFault extends Fault {
   final int afterBytes;
 }
 
+final class StatusStallFault extends Fault {
+  const StatusStallFault(this.status);
+
+  final int status;
+}
+
+final class HeaderStallFault extends Fault {
+  const HeaderStallFault();
+}
+
 final class IgnoreRangeFault extends Fault {
   const IgnoreRangeFault();
 }
@@ -97,6 +107,19 @@ final class FixtureServer {
     final Fault? fault = queued.isEmpty ? null : queued.removeAt(0);
     final HttpResponse response = request.response;
     final Uint8List? body = _files[path];
+    if (fault is StatusStallFault) {
+      response
+        ..statusCode = fault.status
+        ..contentLength = 10;
+      final Socket socket = await response.detachSocket();
+      await socket.flush();
+      _stalled.add(socket);
+      return;
+    }
+    if (fault is HeaderStallFault) {
+      _stalled.add(await response.detachSocket(writeHeaders: false));
+      return;
+    }
     if (fault is StatusFault || body == null) {
       response.statusCode = fault is StatusFault
           ? fault.status

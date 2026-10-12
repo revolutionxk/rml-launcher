@@ -100,9 +100,14 @@ final class RobloxCdn implements StudioCdn {
 
   @override
   Future<Result<String>> resolveGuid(StudioVersion version) async {
-    final LiveVersion? live = (await liveVersion()).valueOrNull;
+    final Result<LiveVersion> liveResult = await liveVersion();
+    final LiveVersion? live = liveResult.valueOrNull;
     if (live != null && live.version == version) {
       return Result<String>.ok(live.guid);
+    }
+    final AppFailure? liveFailure = liveResult.failureOrNull;
+    if (platform.isMac && liveFailure != null) {
+      return Result<String>.err(liveFailure);
     }
     final Result<String> missing = Result<String>.err(
       UnsupportedFailure(
