@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -129,40 +130,40 @@ final class CheckFilesService {
               !_intact(dir, record.packages[entry.name], entry),
         )
         .toList();
-    final List<String> rewritten = <String>[];
-    try {
-      for (final MapEntry<String, String> file
-          in WindowsBuildInstaller.runtimeFiles(build.version, guid).entries) {
-        final File target = File(
-          p.joinAll(<String>[dir, ...file.key.split('/')]),
-        );
-        if (!target.existsSync() || target.readAsStringSync() != file.value) {
-          await WindowsBuildInstaller.writeRuntimeFile(
-            dir,
-            file.key,
-            file.value,
-          );
-          rewritten.add(file.key);
-        }
-      }
-    } on FileSystemException catch (error, stackTrace) {
-      return Result<CheckReport>.err(
-        IoFailure(path: dir, cause: error, stackTrace: stackTrace),
-      );
-    }
+    final String downloads = _layout.downloadsDir(build.version);
     if (broken.isNotEmpty) {
+      final int packed = broken.fold(
+        0,
+        (int sum, PackageEntry e) => sum + e.packedSize,
+      );
+      final int unpacked = broken.fold(
+        0,
+        (int sum, PackageEntry e) => sum + e.unpackedSize,
+      );
+      final Result<int> free = _native.diskFree(_layout.root);
+      final int? available = free.valueOrNull;
+      if (available == null) {
+        return Result<CheckReport>.err(free.failureOrNull!);
+      }
+      final int needed = ((packed + unpacked) * 1.1).ceil();
+      if (available < needed) {
+        return Result<CheckReport>.err(
+          InsufficientSpaceFailure(
+            neededBytes: needed,
+            freeBytes: available,
+            volume: _layout.volume,
+          ),
+        );
+      }
       control.phase(TaskPhase.downloading);
-      final String downloads = _layout.downloadsDir(build.version);
       final InstallProgress progress = InstallProgress(
         control,
-        packed: broken.fold(0, (int sum, PackageEntry e) => sum + e.packedSize),
-        unpacked: broken.fold(
-          0,
-          (int sum, PackageEntry e) => sum + e.unpackedSize,
-        ),
+        packed: packed,
+        unpacked: unpacked,
       );
       for (final PackageEntry entry in broken) {
         final Result<PackageRecord> repaired = await _repair(
+          installId,
           entry,
           guid,
           build,
@@ -174,14 +175,64 @@ final class CheckFilesService {
         );
         final PackageRecord? fresh = repaired.valueOrNull;
         if (fresh == null) {
-          await record.write(dir);
-          return Result<CheckReport>.err(repaired.failureOrNull!);
+          return Result<CheckReport>.err(
+            await _keep(record, dir, repaired.failureOrNull!),
+          );
         }
         record = record.withPackage(entry.name, fresh);
       }
-      await deleteQuietly(downloads);
     }
-    await record.write(dir);
+    final List<String> rewritten = <String>[];
+    try {
+      for (final MapEntry<String, String> file
+          in WindowsBuildInstaller.runtimeFiles(build.version, guid).entries) {
+        final File target = File(
+          p.joinAll(<String>[dir, ...file.key.split('/')]),
+        );
+        final List<int> wanted = utf8.encode(file.value);
+        if (!target.existsSync() ||
+            !_sameBytes(target.readAsBytesSync(), wanted)) {
+          if (_running.isRunning(installId)) {
+            return Result<CheckReport>.err(
+              await _keep(
+                record,
+                dir,
+                StudioRunningFailure(installId: installId),
+              ),
+            );
+          }
+          await WindowsBuildInstaller.writeRuntimeFile(
+            dir,
+            file.key,
+            file.value,
+          );
+          rewritten.add(file.key);
+        }
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      return Result<CheckReport>.err(
+        await _keep(
+          record,
+          dir,
+          IoFailure(path: dir, cause: error, stackTrace: stackTrace),
+        ),
+      );
+    }
+    final AppFailure? unsaved = await _save(record, dir);
+    if (unsaved != null) {
+      return Result<CheckReport>.err(unsaved);
+    }
+    if (broken.isNotEmpty) {
+      final bool shared = _tasks.tasks.any(
+        (StudioTask task) =>
+            task.id != control.taskId &&
+            task.state.isActive &&
+            task.version == build.version.text,
+      );
+      if (!shared) {
+        await deleteQuietly(downloads);
+      }
+    }
     _progressDone(control);
     return Result<CheckReport>.ok(
       CheckReport(
@@ -191,7 +242,26 @@ final class CheckFilesService {
     );
   }
 
+  Future<AppFailure> _keep(
+    FileRecord record,
+    String dir,
+    AppFailure failure,
+  ) async {
+    await _save(record, dir);
+    return failure;
+  }
+
+  Future<AppFailure?> _save(FileRecord record, String dir) async {
+    try {
+      await record.write(dir);
+      return null;
+    } on FileSystemException catch (error, stackTrace) {
+      return IoFailure(path: dir, cause: error, stackTrace: stackTrace);
+    }
+  }
+
   Future<Result<PackageRecord>> _repair(
+    String installId,
     PackageEntry entry,
     String guid,
     StudioBuild build,
@@ -215,6 +285,11 @@ final class CheckFilesService {
     if (downloaded.failureOrNull case final AppFailure failure) {
       return Result<PackageRecord>.err(failure);
     }
+    if (_running.isRunning(installId)) {
+      return Result<PackageRecord>.err(
+        StudioRunningFailure(installId: installId),
+      );
+    }
     final String root = extractionRoot(entry.stem, build.version.major);
     final String destination = root.isEmpty
         ? build.path
@@ -234,6 +309,18 @@ final class CheckFilesService {
         },
       ),
     );
+  }
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<Result<CheckReport>> _checkMac(
@@ -291,12 +378,17 @@ final class CheckFilesService {
         await deleteQuietly(old);
       }
     }
-    await _library.update((StudioLibrary library) {
+    final Result<StudioLibrary> saved = await _library.update((
+      StudioLibrary library,
+    ) {
       final StudioInstall? install = library.byId(installId);
       return install == null
           ? library
           : library.upsert(install.copyWith(current: fresh.build));
     });
+    if (saved.failureOrNull case final AppFailure failure) {
+      return Result<CheckReport>.err(failure);
+    }
     return const Result<CheckReport>.ok(CheckReport(reinstalled: true));
   }
 

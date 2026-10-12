@@ -21,6 +21,7 @@ import 'package:rml_launcher/features/studio/services/build_fetcher.dart';
 import 'package:rml_launcher/features/studio/services/check_files_service.dart';
 import 'package:rml_launcher/features/studio/services/running_watcher.dart';
 
+import '../../../support/fixture_server.dart';
 import '../../../support/studio_fixtures.dart';
 import '../../../support/studio_harness.dart';
 import '../../../support/studio_library_fixtures.dart';
@@ -133,6 +134,33 @@ void main() {
     final CheckReport report = (await service.check('main')).valueOrNull!;
     expect(report.repairedPackages, <String>['RobloxApp.zip']);
     expect(File(file('RobloxStudioBeta.exe')).readAsStringSync(), 'studio');
+  });
+
+  test('a corrupted runtime file does not block the repair', () async {
+    await start(HostOs.windows);
+    File(file('content/avatar/faces/y.png')).deleteSync();
+    File(file('AppSettings.xml'))
+        .writeAsBytesSync(<int>[0xFF, 0xFE, 0x3C, 0x00]);
+    final CheckReport report = (await service.check('main')).valueOrNull!;
+    expect(report.repairedPackages, <String>['content-avatar.zip']);
+    expect(report.rewrittenFiles, <String>['AppSettings.xml']);
+    expect(File(file('AppSettings.xml')).lengthSync(), 111);
+    expect(File(file('content/avatar/faces/y.png')).existsSync(), isTrue);
+  });
+
+  test('a Studio that starts during the repair stops it', () async {
+    await start(HostOs.windows);
+    File(file('content/avatar/faces/y.png')).deleteSync();
+    harness.server.fault('setup/$guid-content-avatar.zip', const DropFault(20));
+    final Future<Result<CheckReport>> running = service.check('main');
+    await until(
+      () => harness.server.hits('setup/$guid-content-avatar.zip') > 0,
+    );
+    harness.native.processes = <NativeProcess>[
+      NativeProcess(pid: 5, path: file('RobloxStudioBeta.exe')),
+    ];
+    expect((await running).failureOrNull, isA<StudioRunningFailure>());
+    expect(File(file('content/avatar/faces/y.png')).existsSync(), isFalse);
   });
 
   test('checking waits for Studio to close', () async {
