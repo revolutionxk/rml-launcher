@@ -19,6 +19,7 @@ final class FileJsonStore implements JsonStore {
 
   final Directory directory;
   final DateTime Function() _clock;
+  final Map<String, Future<void>> _pending = <String, Future<void>>{};
 
   File _file(String name) => File(p.join(directory.path, '$name.json'));
 
@@ -31,13 +32,11 @@ final class FileJsonStore implements JsonStore {
       }
       final Object? decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map<String, Object?>) {
-        await _setAside(file);
-        return const Result<JsonMap?>.ok(null);
+        return await _setAside(file);
       }
       return Result<JsonMap?>.ok(decoded);
     } on FormatException {
-      await _setAside(file);
-      return const Result<JsonMap?>.ok(null);
+      return _setAside(file);
     } on FileSystemException catch (error, stackTrace) {
       return Result<JsonMap?>.err(
         IoFailure(path: file.path, cause: error, stackTrace: stackTrace),
@@ -46,7 +45,16 @@ final class FileJsonStore implements JsonStore {
   }
 
   @override
-  Future<Result<void>> write(String name, JsonMap value) async {
+  Future<Result<void>> write(String name, JsonMap value) {
+    final Future<void> previous = _pending[name] ?? Future<void>.value();
+    final Future<Result<void>> outcome = previous.then(
+      (_) => _writeNow(name, value),
+    );
+    _pending[name] = outcome.then<void>((_) {}, onError: (_) {});
+    return outcome;
+  }
+
+  Future<Result<void>> _writeNow(String name, JsonMap value) async {
     final File file = _file(name);
     final File temp = File('${file.path}.tmp');
     try {
@@ -63,17 +71,33 @@ final class FileJsonStore implements JsonStore {
       await temp.rename(file.path);
       return const Result<void>.ok(null);
     } on FileSystemException catch (error, stackTrace) {
+      await _discard(temp);
       return Result<void>.err(
         IoFailure(path: file.path, cause: error, stackTrace: stackTrace),
       );
     }
   }
 
-  Future<void> _setAside(File file) async {
+  Future<void> _discard(File temp) async {
+    try {
+      await temp.delete();
+    } on FileSystemException {
+      return;
+    }
+  }
+
+  Future<Result<JsonMap?>> _setAside(File file) async {
     final String stamp = _clock().toUtc().toIso8601String().replaceAll(
       ':',
       '-',
     );
-    await file.rename('${file.path}.corrupt-$stamp');
+    try {
+      await file.rename('${file.path}.corrupt-$stamp');
+      return const Result<JsonMap?>.ok(null);
+    } on FileSystemException catch (error, stackTrace) {
+      return Result<JsonMap?>.err(
+        IoFailure(path: file.path, cause: error, stackTrace: stackTrace),
+      );
+    }
   }
 }

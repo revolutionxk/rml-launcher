@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/core/storage/json_store.dart';
 
@@ -81,5 +82,66 @@ void main() {
         .writeAsStringSync('[1, 2]');
     final Result<JsonMap?> result = await store.read('settings');
     expect(result.valueOrNull, isNull);
+    expect(
+      File(
+        p.join(
+          store.directory.path,
+          'settings.json.corrupt-2026-10-11T12-30-00.000Z',
+        ),
+      ).existsSync(),
+      isTrue,
+    );
+    expect(
+      File(p.join(store.directory.path, 'settings.json')).existsSync(),
+      isFalse,
+    );
+  });
+
+  test(
+    'overlapping writes to one document keep the last and leave no temp file',
+    () async {
+      final Future<Result<void>> first = store.write(
+        'settings',
+        <String, Object?>{'a': 1},
+      );
+      final Future<Result<void>> second = store.write(
+        'settings',
+        <String, Object?>{'a': 2},
+      );
+      await Future.wait(<Future<Result<void>>>[first, second]);
+      final Result<JsonMap?> result = await store.read('settings');
+      expect(result.valueOrNull, <String, Object?>{'a': 2});
+      expect(
+        File(p.join(store.directory.path, 'settings.json.tmp')).existsSync(),
+        isFalse,
+      );
+    },
+  );
+
+  test('a corrupt file whose set-aside fails is an io failure', () async {
+    await store.directory.create(recursive: true);
+    File(p.join(store.directory.path, 'settings.json'))
+        .writeAsStringSync('{nope');
+    Directory(
+      p.join(
+        store.directory.path,
+        'settings.json.corrupt-2026-10-11T12-30-00.000Z',
+      ),
+    ).createSync();
+    final Result<JsonMap?> result = await store.read('settings');
+    expect(result.failureOrNull, isA<IoFailure>());
+  });
+
+  test('a failed write removes its temp file', () async {
+    await store.directory.create(recursive: true);
+    Directory(p.join(store.directory.path, 'settings.json')).createSync();
+    final Result<void> result = await store.write('settings', <String, Object?>{
+      'a': 4,
+    });
+    expect(result.failureOrNull, isA<IoFailure>());
+    expect(
+      File(p.join(store.directory.path, 'settings.json.tmp')).existsSync(),
+      isFalse,
+    );
   });
 }
