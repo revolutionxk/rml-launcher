@@ -24,6 +24,7 @@ Future<void> main(List<String> args) async {
       logger: logger,
     );
     await builder.run(input: input, output: output, logger: logger);
+    output.dependencies.addAll(_sources(input.packageRoot));
     await output.findAndAddCodeAssets(
       input,
       names: <String, String>{
@@ -34,4 +35,15 @@ Future<void> main(List<String> args) async {
       regExp: true,
     );
   });
+}
+
+Iterable<Uri> _sources(Uri root) sync* {
+  yield root.resolve('CMakeLists.txt');
+  for (final String folder in <String>['cmake/', 'include/', 'src/']) {
+    final Directory directory = Directory.fromUri(root.resolve(folder));
+    yield directory.uri;
+    yield* directory
+        .listSync(recursive: true)
+        .map((FileSystemEntity entity) => entity.uri);
+  }
 }
