@@ -262,4 +262,37 @@ void main() {
       'studio',
     );
   });
+
+  test('simultaneous creates with one name get distinct ids', () async {
+    await start();
+    final List<Result<StudioInstall>> results = await Future.wait(
+      <Future<Result<StudioInstall>>>[
+        service.create(name: 'Main', look: orange),
+        service.create(name: 'Main', look: orange),
+      ],
+    );
+    expect(results.every((Result<StudioInstall> r) => r.isOk), isTrue);
+    expect(
+      results.map((Result<StudioInstall> r) => r.valueOrNull!.id).toSet(),
+      <String>{'main', 'main-2'},
+    );
+  });
+
+  test('a folder already in the root is never reused or deleted', () async {
+    await start();
+    final File game = File(p.join(harness.layout.root, 'Steam', 'game.bin'))
+      ..createSync(recursive: true);
+    harness.installer.gate = Completer<void>();
+    final Future<Result<StudioInstall>> pending = service.create(
+      name: 'Steam',
+      look: orange,
+    );
+    await until(() => harness.library.value.installs.isNotEmpty);
+    final String id = harness.library.value.installs.single.id;
+    expect(id, isNot('steam'));
+    await until(() => harness.tasks.isBusy(id));
+    harness.tasks.cancel(harness.tasks.activeFor(id)!.id);
+    await pending;
+    expect(game.existsSync(), isTrue);
+  });
 }

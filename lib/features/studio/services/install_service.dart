@@ -7,6 +7,7 @@ import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/core/storage/file_ops.dart';
 import 'package:rml_launcher/core/tasks/studio_task.dart';
 import 'package:rml_launcher/core/tasks/task_center.dart';
+import 'package:rml_launcher/features/studio/data/install/build_files.dart';
 import 'package:rml_launcher/features/studio/data/install/build_installer.dart';
 import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
 import 'package:rml_launcher/features/studio/data/install/mac_build_installer.dart';
@@ -52,19 +53,15 @@ final class InstallService {
     if (!_fetcher.available) {
       return const Result<StudioInstall>.err(BuildFetcher.unavailable);
     }
-    final String id = installIdFor(name, _library.value.ids);
-    await _library.update(
-      (StudioLibrary library) => library.upsert(
-        StudioInstall(
-          id: id,
-          name: name,
-          kind: InstallKind.managed,
-          source: InstallSource.rml,
-          look: look,
-          policy: version == null
-              ? UpdatePolicy.followLive
-              : UpdatePolicy.pinned,
-        ),
+    final String id = await _register(
+      name,
+      (String id) => StudioInstall(
+        id: id,
+        name: name,
+        kind: InstallKind.managed,
+        source: InstallSource.rml,
+        look: look,
+        policy: version == null ? UpdatePolicy.followLive : UpdatePolicy.pinned,
       ),
     );
     _events.emit(InstallAdded(id));
@@ -101,6 +98,9 @@ final class InstallService {
     return _tasks.run<void>(
       TaskRequest(kind: TaskKind.uninstall, installId: installId),
       (TaskControl control) async {
+        if (_running.isRunning(installId)) {
+          return Result<void>.err(StudioRunningFailure(installId: installId));
+        }
         final String dir = _layout.installDir(installId);
         if (!_layout.owns(dir)) {
           return Result<void>.err(
@@ -118,9 +118,12 @@ final class InstallService {
             IoFailure(path: dir, cause: error, stackTrace: stackTrace),
           );
         }
-        await _library.update(
+        final Result<StudioLibrary> saved = await _library.update(
           (StudioLibrary library) => library.remove(installId),
         );
+        if (saved.failureOrNull case final AppFailure failure) {
+          return Result<void>.err(failure);
+        }
         _events.emit(InstallRemoved(installId));
         return const Result<void>.ok(null);
       },
@@ -141,17 +144,15 @@ final class InstallService {
     if (_layout.os == HostOs.linux) {
       return const Result<StudioInstall>.err(BuildFetcher.unavailable);
     }
-    final String id = installIdFor(name, _library.value.ids);
-    await _library.update(
-      (StudioLibrary library) => library.upsert(
-        StudioInstall(
-          id: id,
-          name: name,
-          kind: InstallKind.managed,
-          source: InstallSource.rml,
-          look: source.look,
-          policy: UpdatePolicy.pinned,
-        ),
+    final String id = await _register(
+      name,
+      (String id) => StudioInstall(
+        id: id,
+        name: name,
+        kind: InstallKind.managed,
+        source: InstallSource.rml,
+        look: source.look,
+        policy: UpdatePolicy.pinned,
       ),
     );
     _events.emit(InstallAdded(id));
@@ -161,7 +162,14 @@ final class InstallService {
         installId: id,
         version: build.version.text,
       ),
-      (TaskControl control) => _copyBuild(id, build, control),
+      (TaskControl control) async {
+        if (_library.value.byId(id) == null) {
+          return const Result<StudioInstall>.err(
+            NotFoundFailure(what: 'install'),
+          );
+        }
+        return _copyBuild(id, build, control);
+      },
     );
     if (result.isErr) {
       await _forget(id);
@@ -225,14 +233,21 @@ final class InstallService {
     String installId,
     InstalledBuild installed,
   ) async {
+    bool missing = false;
     final Result<StudioLibrary> saved = await _library.update((
       StudioLibrary library,
     ) {
       final StudioInstall? install = library.byId(installId);
-      return install == null
-          ? library
-          : library.upsert(install.copyWith(current: installed.build));
+      if (install == null) {
+        missing = true;
+        return library;
+      }
+      return library.upsert(install.copyWith(current: installed.build));
     });
+    if (missing) {
+      await deleteManagedBuild(_layout, installed.build);
+      return const Result<void>.err(NotFoundFailure(what: 'install'));
+    }
     final String? replaced = installed.replacedDir;
     if (replaced != null) {
       await deleteQuietly(replaced);
@@ -307,6 +322,28 @@ final class InstallService {
     }
     final Result<void> applied = await _setCurrent(installId, installed);
     return applied.map((_) => _library.value.byId(installId)!);
+  }
+
+  Future<String> _register(
+    String name,
+    StudioInstall Function(String id) build,
+  ) async {
+    late String chosen;
+    await _library.update((StudioLibrary library) {
+      chosen = _freeId(name, library);
+      return library.upsert(build(chosen));
+    });
+    return chosen;
+  }
+
+  String _freeId(String name, StudioLibrary library) {
+    final Directory root = Directory(_layout.root);
+    final Iterable<String> onDisk = root.existsSync()
+        ? root.listSync().map(
+            (FileSystemEntity entry) => p.basename(entry.path).toLowerCase(),
+          )
+        : const <String>[];
+    return installIdFor(name, <String>{...library.ids, ...onDisk});
   }
 
   Future<void> _forget(String installId) async {
