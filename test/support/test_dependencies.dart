@@ -22,6 +22,6 @@ AppDependencies testDependencies({
     settingsRepository: SettingsRepository(memory),
     initialSettings: settings,
     windowChrome: windowChrome ?? FakeWindowChrome(),
-    native: native ?? const FakeNativeService(),
+    native: native ?? FakeNativeService(),
   );
 }

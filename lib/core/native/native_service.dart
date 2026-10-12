@@ -7,6 +7,8 @@ export 'package:rml_native/rml_native.dart' show HashAlgorithm;
 abstract interface class NativeService {
   String get version;
 
+  bool? get osReducesMotion;
+
   Future<Result<String>> hashFile(rml.HashAlgorithm algorithm, String path);
 }
 
@@ -15,6 +17,15 @@ final class RmlNativeService implements NativeService {
 
   @override
   String get version => rml.nativeVersion();
+
+  @override
+  bool? get osReducesMotion {
+    try {
+      return rml.osReduceMotion();
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<Result<String>> hashFile(

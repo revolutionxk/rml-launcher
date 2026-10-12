@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rml_launcher/core/platform/os_reduce_motion.dart';
 import 'package:rml_launcher/design/theme/rml_theme.dart';
 import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/settings/settings_controller.dart';
@@ -13,6 +14,7 @@ class RmlApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppSettings settings = ref.watch(settingsControllerProvider);
+    final bool osReducesMotion = ref.watch(osReduceMotionProvider) ?? false;
     final GoRouter router = ref.watch(appRouterProvider);
     return WidgetsApp.router(
       routerConfig: router,
@@ -27,7 +29,8 @@ class RmlApp extends ConsumerWidget {
           mode: settings.mode,
           reduceMotion: settings.reduceMotion,
           platformBrightness: MediaQuery.platformBrightnessOf(context),
-          platformDisablesAnimations: MediaQuery.disableAnimationsOf(context),
+          platformDisablesAnimations:
+              MediaQuery.disableAnimationsOf(context) || osReducesMotion,
         );
         return RmlTheme(
           data: theme,

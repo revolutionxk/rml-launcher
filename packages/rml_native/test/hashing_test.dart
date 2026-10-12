@@ -13,6 +13,11 @@ void main() {
     expect(nativeVersion(), '0.1.0');
   });
 
+  test('reads the os reduce motion setting without throwing', () {
+    expect(osReduceMotion, returnsNormally);
+    expect(osReduceMotion(), anyOf(isNull, isTrue, isFalse));
+  });
+
   test('hashes bytes', () {
     expect(
       hashBytes(HashAlgorithm.sha256, Uint8List.fromList(utf8.encode('abc'))),

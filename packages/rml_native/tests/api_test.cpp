@@ -94,3 +94,8 @@ TEST_CASE("async hashing of a missing file reports the error text") {
   CHECK(status == RML_ERR_IO);
   CHECK(text.find("missing") != std::string::npos);
 }
+
+TEST_CASE("the os reduce motion setting is reported or unknown") {
+  const int32_t reduce = rml_os_reduce_motion();
+  CHECK((reduce == -1 || reduce == 0 || reduce == 1));
+}

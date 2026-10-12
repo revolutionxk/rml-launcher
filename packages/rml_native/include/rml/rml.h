@@ -47,6 +47,8 @@ RML_API int32_t rml_hash_file(int32_t algorithm, const char* path,
 RML_API int32_t rml_hash_file_async(int32_t algorithm, const char* path,
                                     rml_text_callback callback);
 
+RML_API int32_t rml_os_reduce_motion(void);
+
 #ifdef __cplusplus
 }
 #endif

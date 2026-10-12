@@ -4,9 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rml_launcher/app.dart';
 import 'package:rml_launcher/core/di/providers.dart';
 import 'package:rml_launcher/design/theme/rml_theme.dart';
+import 'package:rml_launcher/design/theme/theme_settings.dart';
+import 'package:rml_launcher/features/settings/data/app_settings.dart';
 import 'package:rml_launcher/features/shell/view/app_shell.dart';
 import 'package:rml_launcher/i18n/translations.g.dart';
 
+import '../../support/fake_native_service.dart';
 import '../../support/fake_window_chrome.dart';
 import '../../support/test_dependencies.dart';
 
@@ -15,14 +18,22 @@ void main() {
 
   setUp(() => chrome = FakeWindowChrome());
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    AppSettings settings = AppSettings.defaults,
+    FakeNativeService? native,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(1180, 760));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appDependenciesProvider.overrideWithValue(
-            testDependencies(windowChrome: chrome),
+            testDependencies(
+              settings: settings,
+              windowChrome: chrome,
+              native: native,
+            ),
           ),
         ],
         child: TranslationProvider(child: const RmlApp()),
@@ -84,6 +95,32 @@ void main() {
     expect(
       RmlTheme.of(tester.element(find.byType(AppShell))).brightness,
       Brightness.dark,
+    );
+  });
+
+  testWidgets('reduce motion System follows the OS setting', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester, native: FakeNativeService(osReducesMotion: true));
+    expect(
+      RmlTheme.of(tester.element(find.byType(AppShell))).motion.reduced,
+      isTrue,
+    );
+  });
+
+  testWidgets('reduce motion Off ignores the OS setting', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(
+      tester,
+      settings: AppSettings.defaults.copyWith(
+        reduceMotion: ReduceMotionSetting.off,
+      ),
+      native: FakeNativeService(osReducesMotion: true),
+    );
+    expect(
+      RmlTheme.of(tester.element(find.byType(AppShell))).motion.reduced,
+      isFalse,
     );
   });
 }

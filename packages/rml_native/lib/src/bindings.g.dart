@@ -54,6 +54,9 @@ external int rml_hash_file_async(
 @ffi.Native<ffi.Pointer<ffi.Char> Function()>()
 external ffi.Pointer<ffi.Char> rml_last_error();
 
+@ffi.Native<ffi.Int32 Function()>()
+external int rml_os_reduce_motion();
+
 @ffi.Native<ffi.Pointer<ffi.Char> Function()>()
 external ffi.Pointer<ffi.Char> rml_version();
 

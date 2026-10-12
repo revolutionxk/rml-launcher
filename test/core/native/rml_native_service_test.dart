@@ -12,6 +12,10 @@ void main() {
     expect(service.version, '0.1.0');
   });
 
+  test('reads the OS reduce motion setting', () {
+    expect(service.osReducesMotion, anyOf(isNull, isTrue, isFalse));
+  });
+
   test('hashes through the native library', () async {
     final Directory dir = await Directory.systemTemp.createTemp('rml app');
     addTearDown(() => dir.delete(recursive: true));
