@@ -7,6 +7,22 @@ library;
 
 import 'dart:ffi' as ffi;
 
+@ffi.Native<
+  ffi.Int32 Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Uint64>)
+>()
+external int rml_disk_free(
+  ffi.Pointer<ffi.Char> path,
+  ffi.Pointer<ffi.Uint64> out_bytes,
+);
+
+@ffi.Native<
+  ffi.Int32 Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Pointer<ffi.Char>>)
+>()
+external int rml_executable_info(
+  ffi.Pointer<ffi.Char> path,
+  ffi.Pointer<ffi.Pointer<ffi.Char>> out_json,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>)>()
 external void rml_free(ffi.Pointer<ffi.Void> pointer);
 
@@ -57,8 +73,37 @@ external ffi.Pointer<ffi.Char> rml_last_error();
 @ffi.Native<ffi.Int32 Function()>()
 external int rml_os_reduce_motion();
 
+@ffi.Native<ffi.Int32 Function(ffi.Int64)>()
+external int rml_process_close(int pid);
+
+@ffi.Native<ffi.Int32 Function(ffi.Int64)>()
+external int rml_process_kill(int pid);
+
+@ffi.Native<
+  ffi.Int32 Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Pointer<ffi.Char>>)
+>()
+external int rml_processes(
+  ffi.Pointer<ffi.Char> executable_name,
+  ffi.Pointer<ffi.Pointer<ffi.Char>> out_json,
+);
+
 @ffi.Native<ffi.Pointer<ffi.Char> Function()>()
 external ffi.Pointer<ffi.Char> rml_version();
+
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ffi.Char>,
+    rml_progress_callback,
+    rml_text_callback,
+  )
+>()
+external int rml_zip_extract_async(
+  ffi.Pointer<ffi.Char> archive,
+  ffi.Pointer<ffi.Char> destination,
+  rml_progress_callback progress,
+  rml_text_callback done,
+);
 
 enum rml_hash_algorithm {
   RML_HASH_MD5(0),
@@ -73,6 +118,17 @@ enum rml_hash_algorithm {
     _ => throw ArgumentError('Unknown value for rml_hash_algorithm: $value'),
   };
 }
+
+typedef rml_progress_callback =
+    ffi.Pointer<ffi.NativeFunction<rml_progress_callbackFunction>>;
+typedef rml_progress_callbackFunction = ffi.Void Function(
+  ffi.Uint64 done_bytes,
+  ffi.Uint64 total_bytes,
+);
+typedef Dartrml_progress_callbackFunction = void Function(
+  int done_bytes,
+  int total_bytes,
+);
 
 enum rml_status {
   RML_OK(0),

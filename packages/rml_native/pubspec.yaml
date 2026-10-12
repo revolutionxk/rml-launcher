@@ -15,6 +15,7 @@ dependencies:
   native_toolchain_cmake: ^0.3.2
 
 dev_dependencies:
+  archive: ^4.5.1
   ffigen: ^23.0.0
   lints: ^6.1.0
   test: ^1.31.0
