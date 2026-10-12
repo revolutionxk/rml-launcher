@@ -3,20 +3,23 @@
 
 #include <cstdlib>
 
-extern "C"
+namespace rml::api
 {
-	const char* rml_version()
+	extern "C"
 	{
-		return RML_NATIVE_VERSION;
-	}
+		RML_API const char* rml_version()
+		{
+			return RML_NATIVE_VERSION;
+		}
 
-	const char* rml_last_error()
-	{
-		return rml::api::last_error();
-	}
+		RML_API const char* rml_last_error()
+		{
+			return last_error();
+		}
 
-	void rml_free(void* pointer)
-	{
-		std::free(pointer);
+		RML_API void rml_free(void* pointer)
+		{
+			std::free(pointer);
+		}
 	}
 }

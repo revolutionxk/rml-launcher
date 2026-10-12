@@ -24,6 +24,14 @@ namespace rml::api
 		return invalid_argument("Unknown hash algorithm " + std::to_string(algorithm));
 	}
 
+	[[nodiscard]] static std::expected<std::string, Failure> file_hash(const hash::Algorithm algorithm, const std::filesystem::path& path)
+	{
+		auto hex = hash::hash_file(algorithm, path);
+		if (!hex)
+			return io_error(std::move(hex.error()));
+		return std::move(*hex);
+	}
+
 	static void write_terminated(const std::string_view text, char* out) noexcept
 	{
 		text.copy(out, text.size());
@@ -49,58 +57,53 @@ namespace rml::api
 
 	static void deliver_file_hash(const hash::Algorithm algorithm, const std::filesystem::path& path, const rml_text_callback callback) noexcept
 	{
-		std::string hex;
-		const auto status = guarded([&]() -> Outcome {
-			auto result = hash::hash_file(algorithm, path);
-			if (!result)
-				return io_error(std::move(result.error()));
-			hex = std::move(*result);
-			return {};
+		const auto hex = attempt([&] {
+			return file_hash(algorithm, path);
 		});
-		callback(status, owned_copy(status == RML_OK ? std::string_view(hex) : last_error()));
-	}
-}
-
-extern "C"
-{
-	std::int32_t rml_hash_bytes(const std::int32_t algorithm, const std::uint8_t* data, const std::uint64_t length, char* out_hex, const std::uint64_t out_capacity)
-	{
-		return rml::api::guarded([&]() -> rml::api::Outcome {
-			const auto parsed = rml::hash::to_algorithm(algorithm);
-			if (!parsed)
-				return rml::api::unknown_algorithm(algorithm);
-			if (data == nullptr && length > 0)
-				return rml::api::invalid_argument("Data is null");
-			const auto bytes = std::as_bytes(std::span(data, static_cast<std::size_t>(length)));
-			return rml::api::copy_to(rml::hash::hash_bytes(*parsed, bytes), out_hex, out_capacity);
-		});
+		callback(hex ? RML_OK : hex.error().status, owned_copy(hex ? *hex : hex.error().message));
 	}
 
-	std::int32_t rml_hash_file(const std::int32_t algorithm, const char* path, char* out_hex, const std::uint64_t out_capacity)
+	extern "C"
 	{
-		return rml::api::guarded([&]() -> rml::api::Outcome {
-			const auto parsed = rml::hash::to_algorithm(algorithm);
-			if (!parsed)
-				return rml::api::unknown_algorithm(algorithm);
-			if (path == nullptr)
-				return rml::api::invalid_argument("Path is null");
-			const auto hex = rml::hash::hash_file(*parsed, rml::platform::path_from_utf8(path));
-			if (!hex)
-				return rml::api::io_error(hex.error());
-			return rml::api::copy_to(*hex, out_hex, out_capacity);
-		});
-	}
+		RML_API std::int32_t rml_hash_bytes(const std::int32_t algorithm, const std::uint8_t* data, const std::uint64_t length, char* out_hex, const std::uint64_t out_capacity)
+		{
+			return guarded([&]() -> Outcome {
+				const auto parsed = hash::to_algorithm(algorithm);
+				if (!parsed)
+					return unknown_algorithm(algorithm);
+				if (data == nullptr && length > 0)
+					return invalid_argument("Data is null");
+				const auto bytes = std::as_bytes(std::span(data, static_cast<std::size_t>(length)));
+				return copy_to(hash::hash_bytes(*parsed, bytes), out_hex, out_capacity);
+			});
+		}
 
-	std::int32_t rml_hash_file_async(const std::int32_t algorithm, const char* path, const rml_text_callback callback)
-	{
-		return rml::api::guarded([&]() -> rml::api::Outcome {
-			const auto parsed = rml::hash::to_algorithm(algorithm);
-			if (!parsed)
-				return rml::api::unknown_algorithm(algorithm);
-			if (path == nullptr || callback == nullptr)
-				return rml::api::invalid_argument("Path and callback are required");
-			std::thread(rml::api::deliver_file_hash, *parsed, rml::platform::path_from_utf8(path), callback).detach();
-			return {};
-		});
+		RML_API std::int32_t rml_hash_file(const std::int32_t algorithm, const char* path, char* out_hex, const std::uint64_t out_capacity)
+		{
+			return guarded([&]() -> Outcome {
+				const auto parsed = hash::to_algorithm(algorithm);
+				if (!parsed)
+					return unknown_algorithm(algorithm);
+				if (path == nullptr)
+					return invalid_argument("Path is null");
+				const auto hex = file_hash(*parsed, platform::path_from_utf8(path));
+				if (!hex)
+					return std::unexpected(hex.error());
+				return copy_to(*hex, out_hex, out_capacity);
+			});
+		}
+
+		RML_API std::int32_t rml_hash_file_async(const std::int32_t algorithm, const char* path, const rml_text_callback callback)
+		{
+			return guarded([&]() -> Outcome {
+				const auto parsed = hash::to_algorithm(algorithm);
+				if (!parsed)
+					return unknown_algorithm(algorithm);
+				if (path == nullptr || callback == nullptr)
+					return invalid_argument("Path and callback are required");
+				std::thread(deliver_file_hash, *parsed, platform::path_from_utf8(path), callback).detach();
+				return {};
+			});
+		}
 	}
 }

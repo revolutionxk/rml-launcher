@@ -8,6 +8,7 @@
 #include <expected>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace rml::api
@@ -27,21 +28,26 @@ namespace rml::api
 	[[nodiscard]] std::int32_t record(rml_status status, std::string_view message);
 
 	template<typename Body>
-	[[nodiscard]] std::int32_t guarded(Body&& body) noexcept
+	[[nodiscard]] std::invoke_result_t<Body> attempt(Body&& body) noexcept
 	{
 		try
 		{
-			if (const Outcome outcome = std::forward<Body>(body)(); !outcome)
-				return record(outcome.error().status, outcome.error().message);
-			return RML_OK;
+			return std::forward<Body>(body)();
 		}
 		catch (const std::exception& exception)
 		{
-			return record(RML_ERR_INTERNAL, exception.what());
+			return std::unexpected(Failure{RML_ERR_INTERNAL, exception.what()});
 		}
 		catch (...)
 		{
-			return record(RML_ERR_INTERNAL, "Unknown error");
+			return std::unexpected(Failure{RML_ERR_INTERNAL, "Unknown error"});
 		}
+	}
+
+	template<typename Body>
+	[[nodiscard]] std::int32_t guarded(Body&& body) noexcept
+	{
+		const auto outcome = attempt(std::forward<Body>(body));
+		return outcome ? RML_OK : record(outcome.error().status, outcome.error().message);
 	}
 }

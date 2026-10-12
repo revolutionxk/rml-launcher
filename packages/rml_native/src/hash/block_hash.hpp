@@ -58,8 +58,7 @@ namespace rml::hash
 		{
 			const auto bit_length = std::bit_cast<std::array<std::byte, sizeof(m_length)>>(in_byte_order<byte_order>(m_length * 8));
 			update(std::array{std::byte{0x80}});
-			while (m_buffered != length_offset)
-				update(std::array{std::byte{0x00}});
+			update(std::span(zeros).first((block_size + length_offset - m_buffered) % block_size));
 			update(bit_length);
 			return std::bit_cast<Digest>(in_byte_order<byte_order>(m_state));
 		}
@@ -67,6 +66,7 @@ namespace rml::hash
 	private:
 		static constexpr auto byte_order = Rounds::byte_order;
 		static constexpr std::size_t length_offset = block_size - sizeof(std::uint64_t);
+		static constexpr std::array<std::byte, block_size> zeros{};
 
 		constexpr void compress() noexcept
 		{

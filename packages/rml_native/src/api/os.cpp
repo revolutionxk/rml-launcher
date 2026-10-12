@@ -3,11 +3,14 @@
 
 #include <cstdint>
 
-extern "C"
+namespace rml::api
 {
-	std::int32_t rml_os_reduce_motion()
+	extern "C"
 	{
-		const auto reduce = rml::os::reduce_motion();
-		return reduce ? static_cast<std::int32_t>(*reduce) : -1;
+		RML_API std::int32_t rml_os_reduce_motion()
+		{
+			const auto reduce = os::reduce_motion();
+			return reduce ? static_cast<std::int32_t>(*reduce) : -1;
+		}
 	}
 }
