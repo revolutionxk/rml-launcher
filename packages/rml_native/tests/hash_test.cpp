@@ -53,6 +53,20 @@ TEST_CASE("md5 matches the RFC 1321 vectors")
 	CHECK(md5("12345678901234567890123456789012345678901234567890123456789012345678901234567890") == "57edf4a22be3c955ac49da2e2107b67a");
 }
 
+TEST_CASE("sha256 pads messages that end at the block edges")
+{
+	CHECK(sha256(std::string(55, 'a')) == "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318");
+	CHECK(sha256(std::string(56, 'a')) == "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a");
+	CHECK(sha256(std::string(64, 'a')) == "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb");
+}
+
+TEST_CASE("md5 pads messages that end at the block edges")
+{
+	CHECK(md5(std::string(55, 'a')) == "ef1772b6dff9a122358552954ad0df65");
+	CHECK(md5(std::string(56, 'a')) == "3b0c8ac703f828b04c6c197006d17218");
+	CHECK(md5(std::string(64, 'a')) == "014842d480b571495a4a0363793f7367");
+}
+
 TEST_CASE("chunked updates match a single update across block edges")
 {
 	const std::string text(200, 'x');
