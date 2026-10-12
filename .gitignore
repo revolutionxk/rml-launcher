@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+packages/rml_native/.dart_tool/

@@ -1,0 +1,61 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  errors:
+    missing_required_param: error
+    missing_return: error
+    body_might_complete_normally_nullable: error
+    invalid_annotation_target: ignore
+
+  exclude:
+    - "**/*.g.dart"
+    - "lib/i18n/**"
+    - build/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - node_modules/**
+    - src-tauri/**
+    - android/**
+    - ios/**
+    - web/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - always_use_package_imports
+    - avoid_bool_literals_in_conditional_expressions
+    - avoid_dynamic_calls
+    - avoid_positional_boolean_parameters
+    - avoid_returning_this
+    - avoid_slow_async_io
+    - avoid_type_to_string
+    - avoid_unused_constructor_parameters
+    - avoid_void_async
+    - cancel_subscriptions
+    - cast_nullable_to_non_nullable
+    - close_sinks
+    - directives_ordering
+    - join_return_with_assignment
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - no_runtimeType_toString
+    - only_throw_errors
+    - prefer_asserts_with_message
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_in_for_each
+    - prefer_final_locals
+    - prefer_null_aware_method_calls
+    - prefer_single_quotes
+    - require_trailing_commas
+    - sort_constructors_first
+    - test_types_in_equals
+    - throw_in_finally
+    - unawaited_futures
+    - unnecessary_lambdas
