@@ -18,7 +18,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -35,11 +41,17 @@ jobs:
       - run: dart run slang
       - name: Generated files are committed
         if: runner.os == 'Linux'
-        run: git diff --exit-code
+        run: |
+          changes="$(git status --porcelain)"
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            exit 1
+          fi
       - run: flutter analyze
       - run: flutter test
       - run: dart test
         working-directory: packages/rml_native
+      - run: flutter build ${{ matrix.target }} --debug
 
   native:
     name: Native (${{ matrix.os }})
