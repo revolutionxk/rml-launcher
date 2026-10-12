@@ -45,7 +45,7 @@ final class FileJsonStore implements JsonStore {
       if (!file.existsSync()) {
         return const Result<JsonMap?>.ok(null);
       }
-      final Object? decoded = jsonDecode(await file.readAsString());
+      final Object? decoded = jsonDecode(utf8.decode(await file.readAsBytes()));
       if (decoded is! Map<String, Object?>) {
         return await _setAside(file);
       }

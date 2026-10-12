@@ -56,6 +56,6 @@ StudioBuild? buildFromVersionFolder(File executable, NativeService native) {
     version: version,
     path: folder,
     guid: name.startsWith('version-') ? name : null,
-    installedAt: executable.lastModifiedSync(),
+    installedAt: executable.lastModifiedSync().toUtc(),
   );
 }

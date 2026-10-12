@@ -341,7 +341,9 @@ final class InstallService {
   ) async {
     String? chosen;
     AppFailure? failure;
-    await _library.update((StudioLibrary library) {
+    final Result<StudioLibrary> saved = await _library.update((
+      StudioLibrary library,
+    ) {
       final Result<Set<String>> onDisk = _rootEntries();
       final Set<String>? taken = onDisk.valueOrNull;
       if (taken == null) {
@@ -352,7 +354,9 @@ final class InstallService {
       return library.upsert(build(chosen!));
     });
     final String? id = chosen;
-    return id == null ? Result<String>.err(failure!) : Result<String>.ok(id);
+    return id == null
+        ? Result<String>.err(failure ?? saved.failureOrNull!)
+        : Result<String>.ok(id);
   }
 
   Result<Set<String>> _rootEntries() {

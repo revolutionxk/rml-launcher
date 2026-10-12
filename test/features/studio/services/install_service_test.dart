@@ -10,12 +10,16 @@ import 'package:rml_launcher/core/tasks/studio_task.dart';
 import 'package:rml_launcher/design/identity/identity_color.dart';
 import 'package:rml_launcher/features/studio/data/cdn/studio_cdn.dart';
 import 'package:rml_launcher/features/studio/data/install/build_marker.dart';
+import 'package:rml_launcher/features/studio/data/install_repository.dart';
+import 'package:rml_launcher/features/studio/data/library_store.dart';
 import 'package:rml_launcher/features/studio/domain/studio_build.dart';
 import 'package:rml_launcher/features/studio/domain/studio_event.dart';
 import 'package:rml_launcher/features/studio/domain/studio_install.dart';
+import 'package:rml_launcher/features/studio/domain/studio_library.dart';
 import 'package:rml_launcher/features/studio/domain/studio_version.dart';
 import 'package:rml_launcher/features/studio/services/install_service.dart';
 
+import '../../../support/memory_json_store.dart';
 import '../../../support/service_harness.dart';
 import '../../../support/studio_fixtures.dart';
 import '../../../support/studio_library_fixtures.dart';
@@ -74,6 +78,32 @@ void main() {
     expect(result.valueOrNull!.policy, UpdatePolicy.pinned);
     expect(result.valueOrNull!.current!.version.text, '0.600.0.1');
     expect(harness.installer.requests.single.guid, 'version-old');
+  });
+
+  test('a library that could not be read refuses new installs', () async {
+    await start();
+    final LibraryStore refused = LibraryStore(
+      InstallRepository(MemoryJsonStore()),
+      StudioLibrary.empty,
+      loadFailure: const IoFailure(path: 'installs.json'),
+    );
+    addTearDown(refused.close);
+    final InstallService locked = InstallService(
+      library: refused,
+      tasks: harness.tasks,
+      fetcher: harness.fetcher,
+      staging: harness.staging,
+      layout: harness.layout,
+      running: harness.running,
+      events: harness.events,
+    );
+    final Result<StudioInstall> result = await locked.create(
+      name: 'Main',
+      look: orange,
+    );
+    expect(result.failureOrNull, same(refused.loadFailure));
+    expect(harness.installer.requests, isEmpty);
+    expect(Directory(harness.layout.installDir('main')).existsSync(), isFalse);
   });
 
   test('the same name twice gets two ids', () async {
