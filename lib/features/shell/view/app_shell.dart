@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -16,12 +17,12 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final RmlColors colors = RmlTheme.of(context).colors;
+    final SingleActivator search = defaultTargetPlatform == TargetPlatform.macOS
+        ? const SingleActivator(LogicalKeyboardKey.keyK, meta: true)
+        : const SingleActivator(LogicalKeyboardKey.keyK, control: true);
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
-            context.go(Routes.search),
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-            context.go(Routes.search),
+        search: () => context.go(Routes.search),
       },
       child: Focus(
         autofocus: true,

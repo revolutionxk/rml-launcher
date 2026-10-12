@@ -2,7 +2,6 @@ import 'package:flutter/painting.dart';
 
 final class RmlTypography {
   const RmlTypography({
-    required this.display,
     required this.title,
     required this.heading,
     required this.body,
@@ -16,18 +15,12 @@ final class RmlTypography {
   static const String mono = 'SourceCodePro';
 
   static const RmlTypography standard = RmlTypography(
-    display: TextStyle(
-      fontFamily: sans,
-      fontSize: 28,
-      height: 34 / 28,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -0.2,
-    ),
     title: TextStyle(
       fontFamily: sans,
       fontSize: 20,
       height: 26 / 20,
       fontWeight: FontWeight.w600,
+      letterSpacing: -0.2,
     ),
     heading: TextStyle(
       fontFamily: sans,
@@ -67,7 +60,6 @@ final class RmlTypography {
     ),
   );
 
-  final TextStyle display;
   final TextStyle title;
   final TextStyle heading;
   final TextStyle body;

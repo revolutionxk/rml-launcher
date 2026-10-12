@@ -52,14 +52,28 @@ void main() {
     expect(find.text('Library'), findsNWidgets(2));
   });
 
+  Future<void> pressK(WidgetTester tester, LogicalKeyboardKey modifier) async {
+    await tester.sendKeyDownEvent(modifier);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(modifier);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('control K opens Search', (WidgetTester tester) async {
     await pumpApp(tester);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
+    await pressK(tester, LogicalKeyboardKey.metaLeft);
+    expect(find.text('Search'), findsOneWidget);
+    await pressK(tester, LogicalKeyboardKey.controlLeft);
     expect(find.text('Search'), findsNWidgets(2));
   });
+
+  testWidgets('command K opens Search on macOS', (WidgetTester tester) async {
+    await pumpApp(tester);
+    await pressK(tester, LogicalKeyboardKey.controlLeft);
+    expect(find.text('Search'), findsOneWidget);
+    await pressK(tester, LogicalKeyboardKey.metaLeft);
+    expect(find.text('Search'), findsNWidgets(2));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   testWidgets('window buttons drive the window on Windows', (
     WidgetTester tester,

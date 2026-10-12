@@ -23,9 +23,7 @@ class PageScaffold extends StatelessWidget {
             header: true,
             child: Text(
               title,
-              style: theme.typography.display.copyWith(
-                color: theme.colors.text,
-              ),
+              style: theme.typography.title.copyWith(color: theme.colors.text),
             ),
           ),
           if (children.isNotEmpty) const SizedBox(height: 24),
