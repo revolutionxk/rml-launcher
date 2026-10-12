@@ -285,4 +285,12 @@ void main() {
         .resolveGuid(StudioVersion.parse('0.717.0.7170982'));
     expect(result.failureOrNull, isA<NetworkFailure>());
   });
+
+  test('a closed client cancels the request', () async {
+    server.serveText('setup/DeployHistory.txt', history);
+    client.close(force: true);
+    final Result<List<DeployedBuild>> result = await cdn(CdnPlatform.windows)
+        .deployHistory();
+    expect(result.failureOrNull, isA<CancelledFailure>());
+  });
 }

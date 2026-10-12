@@ -55,6 +55,20 @@ Future<RemoteFile> _head(
   );
 }
 
+Future<Result<HttpClientRequest>> openRequest(
+  HttpClient client,
+  String method,
+  Uri url,
+) async {
+  try {
+    return Result<HttpClientRequest>.ok(await client.openUrl(method, url));
+  } on StateError catch (error, stackTrace) {
+    return Result<HttpClientRequest>.err(
+      CancelledFailure(cause: error, stackTrace: stackTrace),
+    );
+  }
+}
+
 Future<Result<T>> _send<T>(
   HttpClient client,
   String method,
@@ -64,7 +78,12 @@ Future<Result<T>> _send<T>(
 ) async {
   HttpClientRequest? request;
   try {
-    request = await client.openUrl(method, url);
+    switch (await openRequest(client, method, url)) {
+      case Err<HttpClientRequest>(:final AppFailure failure):
+        return Result<T>.err(failure);
+      case Ok<HttpClientRequest>(:final HttpClientRequest value):
+        request = value;
+    }
     final HttpClientResponse response = await request.close().timeout(
       readTimeout,
     );

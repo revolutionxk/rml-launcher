@@ -145,7 +145,13 @@ final class Downloader {
       await partial.parent.create(recursive: true);
       final int existing = partial.existsSync() ? partial.lengthSync() : 0;
       sync(existing);
-      final HttpClientRequest pending = await _client.getUrl(request.url);
+      final HttpClientRequest pending;
+      switch (await openRequest(_client, 'GET', request.url)) {
+        case Err<HttpClientRequest>(:final AppFailure failure):
+          return Result<void>.err(failure);
+        case Ok<HttpClientRequest>(:final HttpClientRequest value):
+          pending = value;
+      }
       if (existing > 0) {
         pending.headers.set(HttpHeaders.rangeHeader, 'bytes=$existing-');
       }

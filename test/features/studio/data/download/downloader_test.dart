@@ -189,6 +189,17 @@ void main() {
     expect(target().readAsBytesSync(), payload);
   });
 
+  test('a closed client cancels the download', () async {
+    client.close(force: true);
+    final Result<void> result = await downloader().download(
+      request(),
+      abort: AbortSignal(),
+      onBytes: (_) {},
+    );
+    expect(result.failureOrNull, isA<CancelledFailure>());
+    expect(target().existsSync(), isFalse);
+  });
+
   test('a 404 fails at once', () async {
     final Result<void> result = await downloader().download(
       DownloadRequest(
