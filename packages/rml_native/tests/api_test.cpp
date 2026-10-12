@@ -1,5 +1,6 @@
 #include "platform/path.hpp"
 #include "rml/rml.h"
+#include "support.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <string_view>
 #include <system_error>
 
+using rml::testing::TempDirectory;
 using namespace std::chrono_literals;
 
 namespace
@@ -19,40 +21,6 @@ namespace
 	{
 		std::int32_t status;
 		std::string text;
-	};
-
-	class TempDirectory
-	{
-	public:
-		explicit TempDirectory(const std::filesystem::path& name) :
-		    m_path(std::filesystem::temp_directory_path() / name)
-		{
-			std::filesystem::create_directories(m_path);
-		}
-
-		TempDirectory(const TempDirectory&) = delete;
-		TempDirectory& operator=(const TempDirectory&) = delete;
-
-		~TempDirectory()
-		{
-			std::error_code ec;
-			std::filesystem::remove_all(m_path, ec);
-		}
-
-		[[nodiscard]] const std::filesystem::path& path() const noexcept
-		{
-			return m_path;
-		}
-
-		[[nodiscard]] std::string write(const std::filesystem::path& name, const std::string_view content) const
-		{
-			const auto file = m_path / name;
-			std::ofstream(file, std::ios::binary) << content;
-			return rml::platform::to_utf8(file);
-		}
-
-	private:
-		std::filesystem::path m_path;
 	};
 
 	std::promise<Reply>* g_pending = nullptr;

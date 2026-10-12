@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <expected>
 #include <filesystem>
 #include <span>
@@ -32,12 +31,6 @@ namespace rml::api
 		return std::move(*hex);
 	}
 
-	static void write_terminated(const std::string_view text, char* out) noexcept
-	{
-		text.copy(out, text.size());
-		out[text.size()] = '\0';
-	}
-
 	[[nodiscard]] static Outcome copy_to(const std::string_view text, char* out, const std::uint64_t capacity)
 	{
 		const auto needed = text.size() + 1;
@@ -45,14 +38,6 @@ namespace rml::api
 			return invalid_argument("Output buffer needs " + std::to_string(needed) + " bytes");
 		write_terminated(text, out);
 		return {};
-	}
-
-	[[nodiscard]] static char* owned_copy(const std::string_view text) noexcept
-	{
-		auto* const copy = static_cast<char*>(std::malloc(text.size() + 1));
-		if (copy != nullptr)
-			write_terminated(text, copy);
-		return copy;
 	}
 
 	static void deliver_file_hash(const hash::Algorithm algorithm, const std::filesystem::path& path, const rml_text_callback callback) noexcept

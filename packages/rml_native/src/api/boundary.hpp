@@ -26,6 +26,9 @@ namespace rml::api
 
 	[[nodiscard]] const char* last_error() noexcept;
 	[[nodiscard]] std::int32_t record(rml_status status, std::string_view message);
+	void write_terminated(std::string_view text, char* out) noexcept;
+	[[nodiscard]] char* owned_copy(std::string_view text) noexcept;
+	[[nodiscard]] Outcome deliver_text(std::string_view text, char** out);
 
 	template<typename Body>
 	[[nodiscard]] std::invoke_result_t<Body> attempt(Body&& body) noexcept

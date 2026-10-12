@@ -28,9 +28,12 @@ endif ()
 add_library(rml_objects OBJECT)
 target_sources(rml_objects PRIVATE
     src/api/boundary.cpp
+    src/api/disk.cpp
     src/api/hash.cpp
+    src/api/json.cpp
     src/api/library.cpp
     src/api/os.cpp
+    src/fs/disk.cpp
     src/hash/algorithm.cpp
     src/platform/path.cpp
     ${RML_OS_SOURCES}
@@ -64,7 +67,9 @@ if (RML_NATIVE_TESTS)
     target_sources(rml_native_tests PRIVATE
         tests/main.cpp
         tests/api_test.cpp
+        tests/disk_test.cpp
         tests/hash_test.cpp
+        tests/json_test.cpp
     )
     target_link_libraries(rml_native_tests PRIVATE rml_objects doctest::doctest)
     add_test(NAME rml_native_tests COMMAND rml_native_tests)

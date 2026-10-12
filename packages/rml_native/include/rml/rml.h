@@ -46,6 +46,7 @@ extern "C"
 	RML_API int32_t rml_hash_file_async(int32_t algorithm, const char* path, rml_text_callback callback);
 
 	RML_API int32_t rml_os_reduce_motion(void);
+	RML_API int32_t rml_disk_free(const char* path, uint64_t* out_bytes);
 
 #ifdef __cplusplus
 }
