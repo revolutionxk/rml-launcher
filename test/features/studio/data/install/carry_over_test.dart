@@ -83,4 +83,20 @@ void main() {
     expect(result.failureOrNull, isA<ValidationFailure>());
     expect(File(p.join(same, 'A', 'a.txt')).existsSync(), isTrue);
   });
+
+  test('an undo that cannot put a path back says so', () async {
+    final String to = p.join(dir.path, 'new');
+    final String from = p.join(dir.path, 'blocked');
+    File(p.join(to, 'A', 'a.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('a');
+    File(from).createSync(recursive: true);
+    final Result<void> result = await undoCarryOver(
+      <String>['A'],
+      from: from,
+      to: to,
+    );
+    expect(result.failureOrNull, isA<IoFailure>());
+    expect(File(p.join(to, 'A', 'a.txt')).existsSync(), isTrue);
+  });
 }

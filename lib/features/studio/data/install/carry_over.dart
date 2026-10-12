@@ -5,13 +5,13 @@ import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
 import 'package:rml_launcher/core/storage/file_ops.dart';
 
-Future<Result<void>> moveCarryOver(
+Future<Result<List<String>>> moveCarryOver(
   Iterable<String> paths, {
   required String from,
   required String to,
 }) async {
   if (p.equals(from, to)) {
-    return const Result<void>.err(
+    return const Result<List<String>>.err(
       ValidationFailure(message: 'Carry-over source and target are the same.'),
     );
   }
@@ -38,30 +38,45 @@ Future<Result<void>> moveCarryOver(
       await renameWithRetry(entity, target);
       moved.add(relative);
     } on FileSystemException catch (error, stackTrace) {
-      await _restore(moved.reversed, from: from, to: to);
-      return Result<void>.err(
-        IoFailure(path: source, cause: error, stackTrace: stackTrace),
+      final Result<void> undone = await undoCarryOver(
+        moved,
+        from: from,
+        to: to,
+      );
+      return Result<List<String>>.err(
+        undone.failureOrNull ??
+            IoFailure(path: source, cause: error, stackTrace: stackTrace),
       );
     }
   }
-  return const Result<void>.ok(null);
+  return Result<List<String>>.ok(moved);
 }
 
-Future<void> _restore(
-  Iterable<String> done, {
+Future<Result<void>> undoCarryOver(
+  Iterable<String> moved, {
   required String from,
   required String to,
 }) async {
-  for (final String relative in done) {
+  AppFailure? failure;
+  for (final String relative in moved.toList().reversed) {
     final List<String> parts = relative.split('/');
-    final String moved = p.joinAll(<String>[to, ...parts]);
-    final FileSystemEntity entity = FileSystemEntity.isDirectorySync(moved)
-        ? Directory(moved)
-        : File(moved);
+    final String current = p.joinAll(<String>[to, ...parts]);
+    final String original = p.joinAll(<String>[from, ...parts]);
+    final FileSystemEntity entity = FileSystemEntity.isDirectorySync(current)
+        ? Directory(current)
+        : File(current);
     try {
-      await renameWithRetry(entity, p.joinAll(<String>[from, ...parts]));
-    } on FileSystemException {
-      continue;
+      await Directory(p.dirname(original)).create(recursive: true);
+      await renameWithRetry(entity, original);
+    } on FileSystemException catch (error, stackTrace) {
+      failure ??= IoFailure(
+        path: current,
+        cause: error,
+        stackTrace: stackTrace,
+      );
     }
   }
+  return failure == null
+      ? const Result<void>.ok(null)
+      : Result<void>.err(failure);
 }

@@ -5,8 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rml_launcher/core/result/app_failure.dart';
 import 'package:rml_launcher/core/result/result.dart';
+import 'package:rml_launcher/core/storage/json_store.dart';
 import 'package:rml_launcher/core/tasks/studio_task.dart';
 import 'package:rml_launcher/features/studio/data/cdn/studio_cdn.dart';
+import 'package:rml_launcher/features/studio/data/install_repository.dart';
+import 'package:rml_launcher/features/studio/data/library_store.dart';
 import 'package:rml_launcher/features/studio/domain/studio_build.dart';
 import 'package:rml_launcher/features/studio/domain/studio_event.dart';
 import 'package:rml_launcher/features/studio/domain/studio_hooks.dart';
@@ -15,6 +18,7 @@ import 'package:rml_launcher/features/studio/domain/studio_library.dart';
 import 'package:rml_launcher/features/studio/domain/studio_version.dart';
 import 'package:rml_launcher/features/studio/services/update_service.dart';
 
+import '../../../support/memory_json_store.dart';
 import '../../../support/service_harness.dart';
 import '../../../support/studio_library_fixtures.dart';
 
@@ -252,13 +256,75 @@ void main() {
   });
 
   test('applying is refused while the previous build runs', () async {
+    final StudioBuild older = await harness.makeBuild('main', '0.689.0.1');
+    await harness.library.update(
+      (StudioLibrary library) =>
+          library.upsert(main().copyWith(previous: older)),
+    );
     live('0.691.0.1');
     await updates.checkForUpdates();
-    harness.runStudioFrom(harness.layout.studioExecutable(current));
+    harness.runStudioFrom(harness.layout.studioExecutable(older));
     expect(
       (await updates.applyReady('main')).failureOrNull,
       isA<StudioRunningFailure>(),
     );
+    expect(File(settingsIn(current)).existsSync(), isTrue);
+    expect(File(settingsIn(main().ready!)).existsSync(), isFalse);
+  });
+
+  test('retrying an old failed apply leaves the live build alone', () async {
+    harness.hooks.updateGate = (
+      StudioInstall install,
+      StudioVersion candidate,
+    ) async => const UpdateReview(blockers: <String>['blocked']);
+    live('0.691.0.1');
+    await updates.checkForUpdates();
+    expect((await updates.applyReady('main')).isErr, isTrue);
+    final String failedId = harness.tasks.tasks
+        .firstWhere((StudioTask task) => task.kind == TaskKind.applyUpdate)
+        .id;
+    harness.hooks.updateGate = (
+      StudioInstall install,
+      StudioVersion candidate,
+    ) async => const UpdateReview();
+    expect((await updates.applyReady('main')).isOk, isTrue);
+    final StudioBuild applied = main().current!;
+    final Result<Object?>? retried = await harness.tasks.retry(failedId);
+    expect(retried!.isErr, isTrue);
+    expect(main().current, applied);
+    expect(File(settingsIn(applied)).readAsStringSync(), '{"FFlagX":true}');
+    expect(File(settingsIn(main().previous!)).existsSync(), isFalse);
+  });
+
+  test('a failed save keeps the carried files in the new build', () async {
+    final FlakyJsonStore store = FlakyJsonStore();
+    final LibraryStore flaky = await LibraryStore.open(
+      InstallRepository(store),
+    );
+    await flaky.update(
+      (StudioLibrary library) =>
+          library.upsert(managedInstall('main', current: current)),
+    );
+    live('0.691.0.1');
+    final UpdateService service = UpdateService(
+      library: flaky,
+      tasks: harness.tasks,
+      fetcher: harness.fetcher,
+      layout: harness.layout,
+      running: harness.running,
+      hooks: harness.hooks,
+      events: harness.events,
+    );
+    await service.checkForUpdates();
+    final StudioBuild ready = flaky.value.byId('main')!.ready!;
+    store.failWrites = true;
+    final Result<void> result = await service.applyReady('main');
+    expect(result.isErr, isTrue);
+    expect(flaky.value.byId('main')!.current, ready);
+    expect(File(settingsIn(ready)).readAsStringSync(), '{"FFlagX":true}');
+    expect(File(settingsIn(current)).existsSync(), isFalse);
+    await Future<void>.delayed(Duration.zero);
+    expect(harness.seen.whereType<UpdateApplied>(), isEmpty);
   });
 
   test('a Studio started while the gate waits stops the apply', () async {
@@ -290,4 +356,20 @@ void main() {
     expect(harness.installer.requests, isEmpty);
     expect(main().ready, isNull);
   });
+}
+
+final class FlakyJsonStore implements JsonStore {
+  final MemoryJsonStore _inner = MemoryJsonStore();
+  bool failWrites = false;
+
+  @override
+  Future<Result<JsonMap?>> read(String name) => _inner.read(name);
+
+  @override
+  Future<Result<void>> write(String name, JsonMap value) async {
+    if (failWrites) {
+      return const Result<void>.err(IoFailure(path: 'installs.json'));
+    }
+    return _inner.write(name, value);
+  }
 }

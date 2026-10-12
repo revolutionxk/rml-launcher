@@ -88,140 +88,137 @@ final class UpdateService {
     return _hooks.updateGate(install, ready.version);
   }
 
-  Future<Result<void>> applyReady(String installId) async {
-    final StudioInstall? install = _library.value.byId(installId);
-    if (install == null) {
-      return const Result<void>.err(NotFoundFailure(what: 'install'));
-    }
-    final StudioBuild? current = install.current;
-    final StudioBuild? ready = install.ready;
-    if (current == null || ready == null) {
-      return Result<void>.err(
-        ValidationFailure(message: 'No update is ready for ${install.name}.'),
+  Future<Result<void>> applyReady(String installId) => _tasks.run<void>(
+    TaskRequest(kind: TaskKind.applyUpdate, installId: installId),
+    (TaskControl control) async {
+      if (_running.isRunning(installId)) {
+        return Result<void>.err(StudioRunningFailure(installId: installId));
+      }
+      final StudioInstall? install = _library.value.byId(installId);
+      if (install == null) {
+        return const Result<void>.err(NotFoundFailure(what: 'install'));
+      }
+      final StudioBuild? current = install.current;
+      final StudioBuild? ready = install.ready;
+      if (current == null || ready == null) {
+        return Result<void>.err(
+          ValidationFailure(message: 'No update is ready for ${install.name}.'),
+        );
+      }
+      control.version(ready.version.text);
+      final UpdateReview verdict = await _hooks.updateGate(
+        install,
+        ready.version,
       );
-    }
-    final AppFailure? blocked = _blocker(installId);
-    if (blocked != null) {
-      return Result<void>.err(blocked);
-    }
-    return _tasks.run<void>(
-      TaskRequest(
-        kind: TaskKind.applyUpdate,
-        installId: installId,
-        version: ready.version.text,
-      ),
-      (TaskControl control) async {
-        final UpdateReview verdict = await _hooks.updateGate(
-          install,
-          ready.version,
+      if (verdict.blocked) {
+        return Result<void>.err(
+          UpdateBlockedFailure(blockers: verdict.blockers),
         );
-        if (verdict.blocked) {
-          return Result<void>.err(
-            UpdateBlockedFailure(blockers: verdict.blockers),
-          );
+      }
+      if (_running.isRunning(installId)) {
+        return Result<void>.err(StudioRunningFailure(installId: installId));
+      }
+      final String from = _layout.payloadDir(current);
+      final String to = _layout.payloadDir(ready);
+      final Result<List<String>> moved = await moveCarryOver(
+        _hooks.carryOver,
+        from: from,
+        to: to,
+      );
+      final List<String>? done = moved.valueOrNull;
+      if (done == null) {
+        return Result<void>.err(moved.failureOrNull!);
+      }
+      final Result<void> saved = await _swap(
+        install,
+        (StudioInstall latest) =>
+            latest.copyWith(previous: current, current: ready, ready: null),
+      );
+      if (saved.failureOrNull case final AppFailure failure) {
+        if (failure is ValidationFailure) {
+          return Result<void>.err(await _undo(done, from, to, failure));
         }
-        if (_running.isRunning(installId)) {
-          return Result<void>.err(StudioRunningFailure(installId: installId));
-        }
-        final Result<void> moved = await moveCarryOver(
-          _hooks.carryOver,
-          from: _layout.payloadDir(current),
-          to: _layout.payloadDir(ready),
-        );
-        if (moved.isErr) {
-          return moved;
-        }
-        final Result<void> saved = await _swap(
-          install,
-          (StudioInstall latest) =>
-              latest.copyWith(previous: current, current: ready, ready: null),
-        );
-        if (saved.isErr) {
-          await moveCarryOver(
-            _hooks.carryOver,
-            from: _layout.payloadDir(ready),
-            to: _layout.payloadDir(current),
-          );
-          return saved;
-        }
-        final StudioBuild? dropped = install.previous;
-        if (dropped != null) {
-          await _dropUnused(dropped);
-        }
-        _events.emit(
-          UpdateApplied(
-            installId: installId,
-            from: current.version,
-            to: ready.version,
-          ),
-        );
-        return const Result<void>.ok(null);
-      },
-    );
-  }
-
-  Future<Result<void>> rollBack(String installId) async {
-    final StudioInstall? install = _library.value.byId(installId);
-    if (install == null) {
-      return const Result<void>.err(NotFoundFailure(what: 'install'));
-    }
-    final StudioBuild? current = install.current;
-    final StudioBuild? previous = install.previous;
-    if (current == null || previous == null) {
-      return Result<void>.err(
-        ValidationFailure(
-          message: '${install.name} has no previous build to roll back to.',
+        return Result<void>.err(failure);
+      }
+      final StudioBuild? dropped = install.previous;
+      if (dropped != null) {
+        await _dropUnused(dropped);
+      }
+      _events.emit(
+        UpdateApplied(
+          installId: installId,
+          from: current.version,
+          to: ready.version,
         ),
       );
-    }
-    final AppFailure? blocked = _blocker(installId);
-    if (blocked != null) {
-      return Result<void>.err(blocked);
-    }
-    return _tasks.run<void>(
-      TaskRequest(
-        kind: TaskKind.rollBack,
-        installId: installId,
-        version: previous.version.text,
-      ),
-      (TaskControl control) async {
-        if (_running.isRunning(installId)) {
-          return Result<void>.err(StudioRunningFailure(installId: installId));
-        }
-        final Result<void> moved = await moveCarryOver(
-          _hooks.carryOver,
-          from: _layout.payloadDir(current),
-          to: _layout.payloadDir(previous),
-        );
-        if (moved.isErr) {
-          return moved;
-        }
-        final Result<void> saved = await _swap(
-          install,
-          (StudioInstall latest) => latest.copyWith(
-            current: previous,
-            previous: current,
-            policy: UpdatePolicy.pinned,
+      return const Result<void>.ok(null);
+    },
+  );
+
+  Future<Result<void>> rollBack(String installId) => _tasks.run<void>(
+    TaskRequest(kind: TaskKind.rollBack, installId: installId),
+    (TaskControl control) async {
+      if (_running.isRunning(installId)) {
+        return Result<void>.err(StudioRunningFailure(installId: installId));
+      }
+      final StudioInstall? install = _library.value.byId(installId);
+      if (install == null) {
+        return const Result<void>.err(NotFoundFailure(what: 'install'));
+      }
+      final StudioBuild? current = install.current;
+      final StudioBuild? previous = install.previous;
+      if (current == null || previous == null) {
+        return Result<void>.err(
+          ValidationFailure(
+            message: '${install.name} has no previous build to roll back to.',
           ),
         );
-        if (saved.isErr) {
-          await moveCarryOver(
-            _hooks.carryOver,
-            from: _layout.payloadDir(previous),
-            to: _layout.payloadDir(current),
-          );
-          return saved;
+      }
+      control.version(previous.version.text);
+      final String from = _layout.payloadDir(current);
+      final String to = _layout.payloadDir(previous);
+      final Result<List<String>> moved = await moveCarryOver(
+        _hooks.carryOver,
+        from: from,
+        to: to,
+      );
+      final List<String>? done = moved.valueOrNull;
+      if (done == null) {
+        return Result<void>.err(moved.failureOrNull!);
+      }
+      final Result<void> saved = await _swap(
+        install,
+        (StudioInstall latest) => latest.copyWith(
+          current: previous,
+          previous: current,
+          policy: UpdatePolicy.pinned,
+        ),
+      );
+      if (saved.failureOrNull case final AppFailure failure) {
+        if (failure is ValidationFailure) {
+          return Result<void>.err(await _undo(done, from, to, failure));
         }
-        _events.emit(
-          RolledBack(
-            installId: installId,
-            from: current.version,
-            to: previous.version,
-          ),
-        );
-        return const Result<void>.ok(null);
-      },
-    );
+        return Result<void>.err(failure);
+      }
+      _events.emit(
+        RolledBack(
+          installId: installId,
+          from: current.version,
+          to: previous.version,
+        ),
+      );
+      return const Result<void>.ok(null);
+    },
+  );
+
+  Future<AppFailure> _undo(
+    List<String> moved,
+    String from,
+    String to,
+    AppFailure cause,
+  ) async {
+    final Result<void> undone = await undoCarryOver(moved, from: from, to: to);
+    return undone.failureOrNull ?? cause;
   }
 
   Future<Result<void>> setPolicy(String installId, UpdatePolicy policy) async {
@@ -353,16 +350,6 @@ final class UpdateService {
       );
     }
     return saved.map((_) {});
-  }
-
-  AppFailure? _blocker(String installId) {
-    if (_tasks.isBusy(installId)) {
-      return TaskBusyFailure(installId: installId);
-    }
-    if (_running.isRunning(installId)) {
-      return StudioRunningFailure(installId: installId);
-    }
-    return null;
   }
 
   Future<Result<StudioLibrary>> _change(
