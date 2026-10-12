@@ -18,6 +18,7 @@ import 'package:rml_launcher/features/studio/domain/studio_version.dart';
 import 'package:rml_launcher/features/studio/services/build_fetcher.dart';
 import 'package:rml_launcher/features/studio/services/install_service.dart';
 import 'package:rml_launcher/features/studio/services/running_watcher.dart';
+import 'package:rml_launcher/features/studio/services/update_service.dart';
 
 import 'fake_build_installer.dart';
 import 'fake_native_service.dart';
@@ -115,6 +116,17 @@ final class ServiceHarness {
     layout: layout,
     running: running,
     events: events,
+  );
+
+  UpdateService updateService({DateTime Function()? clock}) => UpdateService(
+    library: library,
+    tasks: tasks,
+    fetcher: fetcher,
+    layout: layout,
+    running: running,
+    hooks: hooks,
+    events: events,
+    clock: clock,
   );
 
   void runStudioFrom(String path, {int pid = 100}) => native.processes =
